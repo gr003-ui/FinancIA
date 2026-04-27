@@ -1,4 +1,5 @@
 import Sidebar from '../components/Sidebar';
+import AppShell from '../components/AppShell';
 import './globals.css';
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -6,9 +7,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="es">
       <body className="flex bg-[#080A12] min-h-screen">
         <Sidebar />
-        <div className="flex-1 overflow-y-auto h-screen">
+        <AppShell>
           {children}
-        </div>
+        </AppShell>
       </body>
     </html>
   );

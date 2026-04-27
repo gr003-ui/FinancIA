@@ -31,11 +31,14 @@ interface FinanceState {
   cards: Card[];
   transactions: Transaction[];
   exchangeRate: number;
+  userName: string;
   addCard: (card: Omit<Card, 'id' | 'availableOnePayment' | 'availableInstallments'>) => void;
   removeCard: (id: string) => void;
   addTransaction: (tx: Omit<Transaction, 'id'>) => void;
   removeTransaction: (id: string) => void;
   setExchangeRate: (rate: number) => void;
+  setUserName: (name: string) => void;
+  resetAll: () => void;
 }
 
 export const useFinanceStore = create<FinanceState>()(
@@ -44,8 +47,10 @@ export const useFinanceStore = create<FinanceState>()(
       cards: [],
       transactions: [],
       exchangeRate: 1000,
+      userName: 'Usuario FinancIA',
 
       setExchangeRate: (rate) => set({ exchangeRate: rate }),
+      setUserName: (name) => set({ userName: name }),
 
       addCard: (card) => set((state) => ({
         cards: [...state.cards, {
@@ -86,7 +91,6 @@ export const useFinanceStore = create<FinanceState>()(
         return { transactions: [newTx, ...state.transactions], cards: updatedCards };
       }),
 
-      // Al eliminar, restaura el límite de la tarjeta si el gasto la afectó
       removeTransaction: (id) => set((state) => {
         const tx = state.transactions.find(t => t.id === id);
         if (!tx) return state;
@@ -117,6 +121,16 @@ export const useFinanceStore = create<FinanceState>()(
           cards: updatedCards,
         };
       }),
+
+      // Borra movimientos y restaura los límites disponibles de cada tarjeta
+      resetAll: () => set((state) => ({
+        transactions: [],
+        cards: state.cards.map(card => ({
+          ...card,
+          availableOnePayment: card.limitOnePayment,
+          availableInstallments: card.limitInstallments,
+        })),
+      })),
     }),
     { name: 'financia-storage-v8' }
   )
