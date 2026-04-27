@@ -1,6 +1,6 @@
 "use client";
 import { useState } from 'react';
-import { useFinanceStore } from '../store/useFinanceStore';
+import { useFinanceStore, getMonthlyAmount } from '../store/useFinanceStore';
 import { getDolarBlue } from '../lib/api';
 import {
   PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend,
@@ -10,11 +10,11 @@ import {
   TrendingUp, TrendingDown, Wallet, DollarSign,
   ArrowUpCircle, ArrowDownCircle, RefreshCw, Trash2, CalendarDays,
 } from 'lucide-react';
+import { Transaction } from '../store/useFinanceStore';
 
 const MONTHS = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 const MONTHS_SHORT = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
 
-// Tooltip custom para BarChart (evita el bug de tipos de Recharts)
 const BarTooltip = ({ active, payload, label }: {
   active?: boolean;
   payload?: { name: string; value: number; color: string }[];
@@ -27,9 +27,7 @@ const BarTooltip = ({ active, payload, label }: {
     <div className="bg-slate-800 border border-white/10 rounded-2xl p-4 text-xs shadow-xl">
       <p className="font-black text-white mb-2">{label}</p>
       {payload.map(p => (
-        <p key={p.name} style={{ color: p.color }} className="font-bold">
-          {p.name}: {fmt(p.value)}
-        </p>
+        <p key={p.name} style={{ color: p.color }} className="font-bold">{p.name}: {fmt(p.value)}</p>
       ))}
     </div>
   );
@@ -66,22 +64,29 @@ export default function Dashboard() {
         return d.getMonth() === filterMonth && d.getFullYear() === filterYear;
       });
 
-  const totalIngresos = periodTransactions.filter(t => t.type === 'income')
-    .reduce((acc, t) => acc + toARS(t.amount, t.currency), 0);
-  const totalGastos = periodTransactions.filter(t => t.type === 'expense')
-    .reduce((acc, t) => acc + toARS(t.amount, t.currency), 0);
+  // Balance usa monto mensual: cuotas → amount/installments; resto → amount completo
+  const totalIngresos = periodTransactions
+    .filter(t => t.type === 'income')
+    .reduce((acc, t) => acc + toARS(getMonthlyAmount(t), t.currency), 0);
+
+  const totalGastos = periodTransactions
+    .filter(t => t.type === 'expense')
+    .reduce((acc, t) => acc + toARS(getMonthlyAmount(t), t.currency), 0);
+
   const balance = totalIngresos - totalGastos;
 
-  const chartData = periodTransactions.filter(t => t.type === 'expense')
+  // Gráfico torta: usa monto mensual también para consistencia con KPIs
+  const chartData = periodTransactions
+    .filter(t => t.type === 'expense')
     .reduce((acc: { name: string; value: number }[], curr) => {
-      const val = toARS(curr.amount, curr.currency);
+      const val = toARS(getMonthlyAmount(curr), curr.currency);
       const found = acc.find(i => i.name === curr.method);
       if (found) found.value += val;
       else acc.push({ name: curr.method, value: val });
       return acc;
     }, []);
 
-  // Últimos 6 meses para el BarChart
+  // BarChart: últimos 6 meses con monto mensual
   const monthlyData = Array.from({ length: 6 }, (_, i) => {
     const d = new Date();
     d.setDate(1);
@@ -94,8 +99,10 @@ export default function Dashboard() {
     });
     return {
       name: MONTHS_SHORT[m],
-      Ingresos: monthTx.filter(t => t.type === 'income').reduce((acc, t) => acc + toARS(t.amount, t.currency), 0),
-      Gastos: monthTx.filter(t => t.type === 'expense').reduce((acc, t) => acc + toARS(t.amount, t.currency), 0),
+      Ingresos: monthTx.filter(t => t.type === 'income')
+        .reduce((acc, t) => acc + toARS(getMonthlyAmount(t), t.currency), 0),
+      Gastos: monthTx.filter(t => t.type === 'expense')
+        .reduce((acc, t) => acc + toARS(getMonthlyAmount(t), t.currency), 0),
     };
   });
 
@@ -159,7 +166,7 @@ export default function Dashboard() {
           <p className={`text-3xl font-black tracking-tight ${balance >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
             {formatM(balance)}
           </p>
-          <p className="text-[10px] text-slate-600">ingresos − gastos (pesificado)</p>
+          <p className="text-[10px] text-slate-600">cuotas contadas por su valor mensual</p>
         </div>
 
         <div className="bg-slate-900 p-7 rounded-[2.5rem] border border-white/10 flex flex-col gap-4">
@@ -168,7 +175,9 @@ export default function Dashboard() {
             <div className="p-2 bg-blue-500/10 rounded-xl"><TrendingUp size={18} className="text-blue-400" /></div>
           </div>
           <p className="text-3xl font-black tracking-tight text-white">{formatM(totalIngresos)}</p>
-          <p className="text-[10px] text-slate-600">{periodTransactions.filter(t => t.type === 'income').length} movimientos</p>
+          <p className="text-[10px] text-slate-600">
+            {periodTransactions.filter(t => t.type === 'income').length} movimientos
+          </p>
         </div>
 
         <div className="bg-slate-900 p-7 rounded-[2.5rem] border border-white/10 flex flex-col gap-4">
@@ -177,14 +186,16 @@ export default function Dashboard() {
             <div className="p-2 bg-rose-500/10 rounded-xl"><TrendingDown size={18} className="text-rose-400" /></div>
           </div>
           <p className="text-3xl font-black tracking-tight text-white">{formatM(totalGastos)}</p>
-          <p className="text-[10px] text-slate-600">{periodTransactions.filter(t => t.type === 'expense').length} movimientos</p>
+          <p className="text-[10px] text-slate-600">
+            {periodTransactions.filter(t => t.type === 'expense').length} movimientos
+          </p>
         </div>
 
         <div className="bg-slate-900 p-7 rounded-[2.5rem] border border-white/10 flex flex-col gap-4">
           <div className="flex items-center justify-between">
             <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">USD / ARS</p>
             <div className="flex items-center gap-2">
-              <button onClick={handleRefreshDolar} title="Actualizar con dólar blue real"
+              <button onClick={handleRefreshDolar}
                 className="p-2 bg-amber-500/10 rounded-xl hover:bg-amber-500/20 transition-all">
                 <RefreshCw size={16} className={`text-amber-400 ${refreshing ? 'animate-spin' : ''}`} />
               </button>
@@ -202,7 +213,7 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* CHART + TRANSACCIONES */}
+      {/* TORTA + MOVIMIENTOS */}
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-8">
         <div className="xl:col-span-5 bg-slate-900 p-8 rounded-[3rem] border border-white/10">
           <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-6">
@@ -260,12 +271,12 @@ export default function Dashboard() {
                           </span>
                         )}
                         {t.type === 'income' && t.incomeType && (
-                          <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-400">
+                          <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${t.incomeType === 'fixed' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-blue-500/10 text-blue-400'}`}>
                             {t.incomeType === 'fixed' ? 'Fijo' : 'Variable'}
                           </span>
                         )}
                         {t.installments > 1 && (
-                          <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-white/10 text-slate-400">
+                          <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-purple-500/10 text-purple-400">
                             cuota {t.currentInstallment}/{t.installments}
                           </span>
                         )}
@@ -276,10 +287,19 @@ export default function Dashboard() {
                     <div className="text-right">
                       <p className={`font-black text-sm ${t.type === 'income' ? 'text-emerald-400' : 'text-rose-400'}`}>
                         {t.type === 'income' ? '+' : '-'}
-                        {t.currency === 'USD' ? `U$S ${t.amount.toLocaleString('es-AR')}` : formatM(t.amount)}
+                        {t.currency === 'USD'
+                          ? `U$S ${getMonthlyAmount(t).toLocaleString('es-AR')}`
+                          : formatM(getMonthlyAmount(t))}
                       </p>
-                      {t.currency === 'USD' && (
-                        <p className="text-[10px] text-slate-600 mt-0.5">≈ {formatM(t.amount * exchangeRate)}</p>
+                      {t.installments > 1 && (
+                        <p className="text-[10px] text-slate-600 mt-0.5">
+                          total: {t.currency === 'USD' ? `U$S ${t.amount}` : formatM(t.amount)}
+                        </p>
+                      )}
+                      {t.currency === 'USD' && t.installments <= 1 && (
+                        <p className="text-[10px] text-slate-600 mt-0.5">
+                          ≈ {formatM(t.amount * exchangeRate)}
+                        </p>
                       )}
                     </div>
                     <button onClick={() => removeTransaction(t.id)}
@@ -294,21 +314,17 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* GRÁFICO MENSUAL — últimos 6 meses */}
+      {/* GRÁFICO MENSUAL */}
       <div className="bg-slate-900 p-8 rounded-[3rem] border border-white/10">
         <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-6">
-          Evolución Mensual — Últimos 6 Meses
+          Evolución Mensual — Últimos 6 Meses (valores mensuales efectivos)
         </p>
         <ResponsiveContainer width="100%" height={280}>
           <BarChart data={monthlyData} barGap={4} barCategoryGap="30%">
             <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
             <XAxis dataKey="name" tick={{ fill: '#64748b', fontSize: 11, fontWeight: 700 }} axisLine={false} tickLine={false} />
-            <YAxis
-              tick={{ fill: '#64748b', fontSize: 10 }}
-              axisLine={false}
-              tickLine={false}
-              tickFormatter={(v: number) => `$${v >= 1000 ? `${(v / 1000).toFixed(0)}k` : v}`}
-            />
+            <YAxis tick={{ fill: '#64748b', fontSize: 10 }} axisLine={false} tickLine={false}
+              tickFormatter={(v: number) => `$${v >= 1000 ? `${(v / 1000).toFixed(0)}k` : v}`} />
             <Tooltip content={<BarTooltip />} cursor={{ fill: 'rgba(255,255,255,0.03)' }} />
             <Legend wrapperStyle={{ color: '#94a3b8', fontSize: '12px', paddingTop: '16px' }} />
             <Bar dataKey="Ingresos" fill="#10b981" radius={[6, 6, 0, 0]} />
@@ -316,7 +332,6 @@ export default function Dashboard() {
           </BarChart>
         </ResponsiveContainer>
       </div>
-
     </div>
   );
 }
