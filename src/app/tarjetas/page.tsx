@@ -1,8 +1,17 @@
 "use client";
 import { useState } from 'react';
 import { useFinanceStore } from '../../store/useFinanceStore';
-import { Plus, CreditCard as CardIcon, Trash2 } from 'lucide-react';
+import { Plus, Trash2 } from 'lucide-react';
 import TransactionForm from '../../components/TransactionForm';
+import CardCredit from '../../components/CardCredit';
+
+const GRADIENTS = [
+  'from-emerald-600 to-emerald-900',
+  'from-blue-600 to-blue-900',
+  'from-purple-600 to-purple-900',
+  'from-rose-600 to-rose-900',
+  'from-amber-600 to-amber-900',
+];
 
 export default function TarjetasPage() {
   const { cards, addCard, removeCard } = useFinanceStore();
@@ -13,9 +22,6 @@ export default function TarjetasPage() {
     limitInst: '',
     type: 'Crédito' as 'Crédito' | 'Débito',
   });
-
-  const formatM = (v: number) =>
-    new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(v);
 
   const handleAddCard = () => {
     if (!newCard.bank || !newCard.limitOne) return;
@@ -37,9 +43,9 @@ export default function TarjetasPage() {
           <h1 className="text-5xl font-black tracking-tighter text-white">Mis Tarjetas</h1>
           <button
             onClick={() => setShowAdd(!showAdd)}
-            className="bg-emerald-500 text-white px-8 py-4 rounded-2xl font-black flex gap-2 shadow-lg shadow-emerald-500/20 hover:bg-emerald-400 transition-all"
+            className="bg-emerald-500 text-white px-8 py-4 rounded-2xl font-black flex gap-2 items-center shadow-lg shadow-emerald-500/20 hover:bg-emerald-400 transition-all"
           >
-            <Plus /> {showAdd ? 'CERRAR' : 'NUEVA TARJETA'}
+            <Plus size={18} /> {showAdd ? 'CERRAR' : 'NUEVA TARJETA'}
           </button>
         </div>
 
@@ -84,47 +90,24 @@ export default function TarjetasPage() {
           </div>
         )}
 
+        {cards.length === 0 && (
+          <div className="text-center py-20 text-slate-600 italic">
+            No tenés tarjetas cargadas todavía.
+          </div>
+        )}
+
         <div className="grid gap-6">
-          {cards.length === 0 && (
-            <div className="text-center py-20 text-slate-600 italic">
-              No tenés tarjetas cargadas todavía.
-            </div>
-          )}
-          {cards.map(c => (
-            <div
-              key={c.id}
-              className="bg-slate-900 p-8 rounded-[3rem] text-white flex flex-col md:flex-row justify-between items-center border border-white/10 relative group"
-            >
-              <div>
-                <div className="flex items-center gap-3 mb-2">
-                  <CardIcon className="text-emerald-500" size={28} />
-                  <span className="text-[10px] font-black bg-emerald-500/20 text-emerald-400 px-3 py-1 rounded-full uppercase">
-                    {c.type}
-                  </span>
-                </div>
-                <h3 className="text-3xl font-black tracking-tighter">{c.bank}</h3>
-              </div>
-
-              <div className="flex gap-4 mt-4 md:mt-0">
-                <div className="bg-white/5 p-6 rounded-[2rem] text-right min-w-[160px] border border-white/5">
-                  <p className="text-[10px] font-black text-slate-500 uppercase">1 Pago</p>
-                  <p className="text-xl font-black text-emerald-400">{formatM(c.availableOnePayment)}</p>
-                  <p className="text-[10px] text-slate-600 mt-1">de {formatM(c.limitOnePayment)}</p>
-                </div>
-                {c.type === 'Crédito' && (
-                  <div className="bg-white/5 p-6 rounded-[2rem] text-right min-w-[160px] border border-white/5">
-                    <p className="text-[10px] font-black text-slate-500 uppercase">Cuotas</p>
-                    <p className="text-xl font-black text-blue-400">{formatM(c.availableInstallments)}</p>
-                    <p className="text-[10px] text-slate-600 mt-1">de {formatM(c.limitInstallments)}</p>
-                  </div>
-                )}
-              </div>
-
+          {cards.map((card, index) => (
+            <div key={card.id} className="relative group">
+              <CardCredit
+                card={card}
+                gradient={GRADIENTS[index % GRADIENTS.length]}
+              />
               <button
-                onClick={() => removeCard(c.id)}
-                className="absolute top-6 right-6 text-slate-700 hover:text-rose-500 transition-colors opacity-0 group-hover:opacity-100"
+                onClick={() => removeCard(card.id)}
+                className="absolute top-5 right-5 opacity-0 group-hover:opacity-100 transition-opacity bg-black/30 hover:bg-rose-500 text-white p-2 rounded-xl"
               >
-                <Trash2 size={20} />
+                <Trash2 size={16} />
               </button>
             </div>
           ))}

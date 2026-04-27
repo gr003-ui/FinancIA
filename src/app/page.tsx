@@ -1,10 +1,16 @@
 "use client";
+import { useState } from 'react';
 import { useFinanceStore } from '../store/useFinanceStore';
+import { getDolarBlue } from '../lib/api';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recharts';
-import { TrendingUp, TrendingDown, Wallet, DollarSign, ArrowUpCircle, ArrowDownCircle } from 'lucide-react';
+import {
+  TrendingUp, TrendingDown, Wallet, DollarSign,
+  ArrowUpCircle, ArrowDownCircle, RefreshCw, Trash2,
+} from 'lucide-react';
 
 export default function Dashboard() {
-  const { transactions, exchangeRate, setExchangeRate } = useFinanceStore();
+  const { transactions, exchangeRate, setExchangeRate, removeTransaction } = useFinanceStore();
+  const [refreshing, setRefreshing] = useState(false);
 
   const toARS = (amount: number, currency: 'ARS' | 'USD') =>
     currency === 'USD' ? amount * exchangeRate : amount;
@@ -38,14 +44,24 @@ export default function Dashboard() {
   const COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#ef4444'];
 
   const methodColor: Record<string, string> = {
-    'Efectivo': 'bg-emerald-500/10 text-emerald-400',
-    'Débito': 'bg-blue-500/10 text-blue-400',
-    'Crédito': 'bg-purple-500/10 text-purple-400',
+    'Efectivo':  'bg-emerald-500/10 text-emerald-400',
+    'Débito':    'bg-blue-500/10 text-blue-400',
+    'Crédito':   'bg-purple-500/10 text-purple-400',
+  };
+
+  const handleRefreshDolar = async () => {
+    setRefreshing(true);
+    const data = await getDolarBlue();
+    if (data.venta > 0) setExchangeRate(data.venta);
+    setRefreshing(false);
   };
 
   return (
     <div className="p-10 space-y-10">
+
+      {/* KPI CARDS */}
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-6">
+
         <div className="bg-slate-900 p-7 rounded-[2.5rem] border border-white/10 flex flex-col gap-4">
           <div className="flex items-center justify-between">
             <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Balance Total</p>
@@ -67,7 +83,9 @@ export default function Dashboard() {
             </div>
           </div>
           <p className="text-3xl font-black tracking-tight text-white">{formatM(totalIngresos)}</p>
-          <p className="text-[10px] text-slate-600">{transactions.filter(t => t.type === 'income').length} movimientos</p>
+          <p className="text-[10px] text-slate-600">
+            {transactions.filter(t => t.type === 'income').length} movimientos
+          </p>
         </div>
 
         <div className="bg-slate-900 p-7 rounded-[2.5rem] border border-white/10 flex flex-col gap-4">
@@ -78,14 +96,28 @@ export default function Dashboard() {
             </div>
           </div>
           <p className="text-3xl font-black tracking-tight text-white">{formatM(totalGastos)}</p>
-          <p className="text-[10px] text-slate-600">{transactions.filter(t => t.type === 'expense').length} movimientos</p>
+          <p className="text-[10px] text-slate-600">
+            {transactions.filter(t => t.type === 'expense').length} movimientos
+          </p>
         </div>
 
         <div className="bg-slate-900 p-7 rounded-[2.5rem] border border-white/10 flex flex-col gap-4">
           <div className="flex items-center justify-between">
             <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Cotización USD/ARS</p>
-            <div className="p-2 bg-amber-500/10 rounded-xl">
-              <DollarSign size={18} className="text-amber-400" />
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleRefreshDolar}
+                title="Actualizar con dólar blue real"
+                className="p-2 bg-amber-500/10 rounded-xl hover:bg-amber-500/20 transition-all"
+              >
+                <RefreshCw
+                  size={18}
+                  className={`text-amber-400 ${refreshing ? 'animate-spin' : ''}`}
+                />
+              </button>
+              <div className="p-2 bg-amber-500/10 rounded-xl">
+                <DollarSign size={18} className="text-amber-400" />
+              </div>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -97,11 +129,14 @@ export default function Dashboard() {
               onChange={(e) => setExchangeRate(Number(e.target.value))}
             />
           </div>
-          <p className="text-[10px] text-slate-600">editá para actualizar la cotización</p>
+          <p className="text-[10px] text-slate-600">editá o actualizá con el azul real</p>
         </div>
+
       </div>
 
+      {/* CHART + TRANSACCIONES */}
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-8">
+
         <div className="xl:col-span-5 bg-slate-900 p-8 rounded-[3rem] border border-white/10">
           <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-6">
             Gastos por Método de Pago
@@ -163,7 +198,7 @@ export default function Dashboard() {
                     </div>
                     <div>
                       <p className="font-bold text-white text-sm leading-tight">{t.description}</p>
-                      <div className="flex items-center gap-2 mt-1">
+                      <div className="flex items-center gap-2 mt-1 flex-wrap">
                         <span className="text-[10px] text-slate-500">{formatDate(t.date)}</span>
                         {t.type === 'expense' && (
                           <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${methodColor[t.method] ?? 'bg-white/10 text-slate-400'}`}>
@@ -177,30 +212,40 @@ export default function Dashboard() {
                         )}
                         {t.installments > 1 && (
                           <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-white/10 text-slate-400">
-                            {t.currentInstallment}/{t.installments}
+                            cuota {t.currentInstallment}/{t.installments}
                           </span>
                         )}
                       </div>
                     </div>
                   </div>
-                  <div className="text-right">
-                    <p className={`font-black text-sm ${t.type === 'income' ? 'text-emerald-400' : 'text-rose-400'}`}>
-                      {t.type === 'income' ? '+' : '-'}
-                      {t.currency === 'USD'
-                        ? `U$S ${t.amount.toLocaleString('es-AR')}`
-                        : formatM(t.amount)}
-                    </p>
-                    {t.currency === 'USD' && (
-                      <p className="text-[10px] text-slate-600 mt-0.5">
-                        ≈ {formatM(t.amount * exchangeRate)}
+
+                  <div className="flex items-center gap-3">
+                    <div className="text-right">
+                      <p className={`font-black text-sm ${t.type === 'income' ? 'text-emerald-400' : 'text-rose-400'}`}>
+                        {t.type === 'income' ? '+' : '-'}
+                        {t.currency === 'USD'
+                          ? `U$S ${t.amount.toLocaleString('es-AR')}`
+                          : formatM(t.amount)}
                       </p>
-                    )}
+                      {t.currency === 'USD' && (
+                        <p className="text-[10px] text-slate-600 mt-0.5">
+                          ≈ {formatM(t.amount * exchangeRate)}
+                        </p>
+                      )}
+                    </div>
+                    <button
+                      onClick={() => removeTransaction(t.id)}
+                      className="opacity-0 group-hover:opacity-100 transition-opacity p-2 rounded-xl hover:bg-rose-500/20 text-slate-600 hover:text-rose-400"
+                    >
+                      <Trash2 size={15} />
+                    </button>
                   </div>
                 </div>
               ))}
             </div>
           )}
         </div>
+
       </div>
     </div>
   );

@@ -1,46 +1,76 @@
 "use client";
 import { CreditCard } from 'lucide-react';
+import { Card } from '../store/useFinanceStore';
 
-interface CardProps {
-  bank: string;
-  lastFour: string;
-  limit: number;
-  available: number;
-  color: string;
+interface CardCreditProps {
+  card: Card;
+  gradient?: string;
 }
 
-export default function CardCredit({ bank, lastFour, limit, available, color }: CardProps) {
-  const percentage = (available / limit) * 100;
+const formatM = (v: number) =>
+  new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(v);
+
+export default function CardCredit({ card, gradient = 'from-emerald-600 to-emerald-900' }: CardCreditProps) {
+  const usedOne = card.limitOnePayment - card.availableOnePayment;
+  const percentUsedOne = card.limitOnePayment > 0
+    ? Math.min((usedOne / card.limitOnePayment) * 100, 100)
+    : 0;
+
+  const usedInst = card.limitInstallments - card.availableInstallments;
+  const percentUsedInst = card.limitInstallments > 0
+    ? Math.min((usedInst / card.limitInstallments) * 100, 100)
+    : 0;
 
   return (
-    <div className={`${color} p-6 rounded-[2rem] text-white shadow-lg space-y-6 relative overflow-hidden group`}>
+    <div className={`bg-gradient-to-br ${gradient} p-7 rounded-[2rem] text-white shadow-xl space-y-6 relative overflow-hidden group`}>
+
+      {/* Header */}
       <div className="flex justify-between items-start relative z-10">
-        <CreditCard size={32} strokeWidth={1.5} />
-        <span className="font-black italic text-xl">{bank}</span>
-      </div>
-      
-      <div className="space-y-1 relative z-10">
-        <p className="text-[10px] font-bold uppercase opacity-60">Disponible</p>
-        <p className="text-2xl font-black">${available.toLocaleString('es-AR')}</p>
+        <CreditCard size={32} strokeWidth={1.5} className="opacity-80" />
+        <div className="text-right">
+          <p className="font-black italic text-xl">{card.bank}</p>
+          <span className="text-[10px] font-black bg-white/20 px-2 py-0.5 rounded-full uppercase mt-1 inline-block">
+            {card.type}
+          </span>
+        </div>
       </div>
 
-      <div className="space-y-2 relative z-10">
-        <div className="flex justify-between text-[10px] font-bold uppercase">
-          <span>Límite: ${limit.toLocaleString('es-AR')}</span>
-          <span>{Math.round(percentage)}%</span>
+      {/* Límite 1 pago */}
+      <div className="relative z-10 space-y-1.5">
+        <p className="text-[10px] font-bold uppercase opacity-60">Disponible — 1 Pago</p>
+        <p className="text-2xl font-black">{formatM(card.availableOnePayment)}</p>
+        <div className="flex justify-between text-[10px] font-bold opacity-50">
+          <span>Límite: {formatM(card.limitOnePayment)}</span>
+          <span>{Math.round(100 - percentUsedOne)}% libre</span>
         </div>
         <div className="w-full bg-white/20 h-1.5 rounded-full overflow-hidden">
-          <div 
-            className="bg-white h-full transition-all duration-1000" 
-            style={{ width: `${percentage}%` }}
+          <div
+            className="bg-white h-full transition-all duration-1000"
+            style={{ width: `${100 - percentUsedOne}%` }}
           />
         </div>
       </div>
-      
-      <p className="text-sm font-medium tracking-widest opacity-80 relative z-10">**** **** **** {lastFour}</p>
-      
-      {/* Círculos decorativos de fondo */}
-      <div className="absolute -right-4 -bottom-4 w-24 h-24 bg-white/10 rounded-full blur-2xl group-hover:scale-150 transition-transform duration-700"></div>
+
+      {/* Límite cuotas (solo crédito) */}
+      {card.type === 'Crédito' && card.limitInstallments > 0 && (
+        <div className="relative z-10 space-y-1.5 pt-2 border-t border-white/20">
+          <p className="text-[10px] font-bold uppercase opacity-60">Disponible — Cuotas</p>
+          <p className="text-xl font-black">{formatM(card.availableInstallments)}</p>
+          <div className="flex justify-between text-[10px] font-bold opacity-50">
+            <span>Límite: {formatM(card.limitInstallments)}</span>
+            <span>{Math.round(100 - percentUsedInst)}% libre</span>
+          </div>
+          <div className="w-full bg-white/20 h-1.5 rounded-full overflow-hidden">
+            <div
+              className="bg-white h-full transition-all duration-1000"
+              style={{ width: `${100 - percentUsedInst}%` }}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Círculo decorativo */}
+      <div className="absolute -right-6 -bottom-6 w-32 h-32 bg-white/10 rounded-full blur-2xl group-hover:scale-150 transition-transform duration-700 z-0" />
     </div>
   );
 }
