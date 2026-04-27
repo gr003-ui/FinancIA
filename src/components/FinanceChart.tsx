@@ -5,17 +5,17 @@ import { useFinanceStore } from '../store/useFinanceStore';
 const COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
 
 export default function FinanceChart() {
-  const { transactions } = useFinanceStore();
+  const { transactions, exchangeRate } = useFinanceStore();
 
-  // Agrupamos gastos por categoría
   const data = transactions
     .filter(t => t.type === 'expense')
-    .reduce((acc: any[], curr) => {
-      const existing = acc.find(item => item.name === curr.category);
+    .reduce((acc: { name: string; value: number }[], curr) => {
+      const val = curr.currency === 'USD' ? curr.amount * exchangeRate : curr.amount;
+      const existing = acc.find(item => item.name === curr.method);
       if (existing) {
-        existing.value += curr.amount;
+        existing.value += val;
       } else {
-        acc.push({ name: curr.category, value: curr.amount });
+        acc.push({ name: curr.method, value: val });
       }
       return acc;
     }, []);
@@ -37,11 +37,11 @@ export default function FinanceChart() {
             paddingAngle={5}
             dataKey="value"
           >
-            {data.map((entry, index) => (
+            {data.map((_, index) => (
               <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
             ))}
           </Pie>
-          <Tooltip 
+          <Tooltip
             contentStyle={{ borderRadius: '1rem', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
           />
           <Legend iconType="circle" />

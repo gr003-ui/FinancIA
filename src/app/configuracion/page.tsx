@@ -3,32 +3,28 @@ import { useFinanceStore } from '../../store/useFinanceStore';
 import { User, LogOut, ShieldCheck, Bell, CreditCard } from 'lucide-react';
 
 export default function ConfigPage() {
-  // Obtenemos los datos del store. 
-  // Si da error, es porque necesitamos que el store tenga 'user' y 'logout' definidos.
   const { cards, transactions } = useFinanceStore();
-  
-  // Datos simulados de usuario (podés integrarlos al store luego)
+
   const user = {
-    name: "Usuario FinancIA",
-    email: "hola@financia.com",
-    plan: "Pro"
+    name: 'Usuario FinancIA',
+    email: 'hola@financia.com',
+    plan: 'Pro',
   };
 
   const handleLogout = () => {
-    // Aquí podés limpiar el localStorage si querés borrar todo
     localStorage.clear();
-    window.location.href = "/";
+    window.location.href = '/';
   };
 
   return (
-    <main className="p-10 max-w-4xl mx-auto space-y-10 animate-in fade-in duration-500">
+    <main className="p-10 max-w-4xl mx-auto space-y-10">
       <header>
         <h1 className="text-4xl font-black text-slate-900 tracking-tighter">Configuración</h1>
         <p className="text-slate-500 font-medium">Gestioná tu perfil y preferencias de la cuenta.</p>
       </header>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-        
+
         {/* PERFIL DEL USUARIO */}
         <div className="md:col-span-1 space-y-6">
           <div className="bg-white rounded-[3rem] p-8 border border-slate-100 shadow-xl text-center">
@@ -60,7 +56,7 @@ export default function ConfigPage() {
         {/* OPCIONES DE CONFIGURACIÓN */}
         <div className="md:col-span-2 space-y-4">
           <div className="bg-white rounded-[3rem] p-8 border border-slate-100 shadow-sm space-y-2">
-            
+
             <button className="w-full flex items-center justify-between p-5 hover:bg-slate-50 rounded-2xl transition-all group">
               <div className="flex items-center gap-4">
                 <div className="p-3 bg-blue-50 text-blue-600 rounded-xl group-hover:bg-blue-600 group-hover:text-white transition-colors">
@@ -98,7 +94,7 @@ export default function ConfigPage() {
             </button>
 
             <div className="pt-6 mt-6 border-t border-slate-100">
-              <button 
+              <button
                 onClick={handleLogout}
                 className="w-full flex items-center gap-4 p-5 bg-rose-50 text-rose-600 rounded-2xl hover:bg-rose-600 hover:text-white transition-all font-black uppercase text-xs tracking-widest justify-center"
               >

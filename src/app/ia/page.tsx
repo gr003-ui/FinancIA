@@ -5,13 +5,19 @@ import { getIAAdvice } from '../../lib/gemini';
 import { BrainCircuit, Send, Sparkles } from 'lucide-react';
 
 export default function IAPage() {
-  const { transactions, balance } = useFinanceStore();
-  const [chat, setChat] = useState<{role: string, text: string}[]>([]);
+  const { transactions, exchangeRate } = useFinanceStore();
+  const [chat, setChat] = useState<{ role: string; text: string }[]>([]);
   const [loading, setLoading] = useState(false);
+
+  // balance derivado: suma de ingresos pesificados menos suma de gastos pesificados
+  const balance = transactions.reduce((acc, t) => {
+    const val = t.currency === 'USD' ? t.amount * exchangeRate : t.amount;
+    return t.type === 'income' ? acc + val : acc - val;
+  }, 0);
 
   const pedirConsejo = async () => {
     setLoading(true);
-    const advice = await getIAAdvice(transactions, balance, 1250); // Ejemplo con dolar a 1250
+    const advice = await getIAAdvice(transactions, balance, exchangeRate);
     setChat([...chat, { role: 'ai', text: advice }]);
     setLoading(false);
   };
@@ -23,7 +29,7 @@ export default function IAPage() {
           <BrainCircuit size={32} />
         </div>
         <h1 className="text-3xl font-black text-slate-800">Analista FinancIA</h1>
-        <p className="text-slate-500 font-medium text-sm">Tu consultor personal basado en Gemini 1.5 Pro</p>
+        <p className="text-slate-500 font-medium text-sm">Tu consultor personal basado en Gemini 1.5 Flash</p>
       </div>
 
       <div className="bg-white rounded-[3rem] p-8 border border-slate-100 shadow-xl min-h-[400px] flex flex-col justify-between">
@@ -41,12 +47,12 @@ export default function IAPage() {
           ))}
         </div>
 
-        <button 
+        <button
           onClick={pedirConsejo}
           disabled={loading}
           className="w-full mt-8 bg-slate-900 text-white p-5 rounded-2xl font-black flex items-center justify-center gap-3 hover:bg-emerald-600 transition-all disabled:opacity-50"
         >
-          {loading ? "Pensando..." : "SOLICITAR ANÁLISIS COMPLETO"} <Send size={18} />
+          {loading ? 'Pensando...' : 'SOLICITAR ANÁLISIS COMPLETO'} <Send size={18} />
         </button>
       </div>
     </main>
