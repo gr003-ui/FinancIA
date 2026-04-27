@@ -5,12 +5,34 @@ import { getDolarBlue } from '../lib/api';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recharts';
 import {
   TrendingUp, TrendingDown, Wallet, DollarSign,
-  ArrowUpCircle, ArrowDownCircle, RefreshCw, Trash2,
+  ArrowUpCircle, ArrowDownCircle, RefreshCw, Trash2, CalendarDays,
 } from 'lucide-react';
+
+const MONTHS = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+const MONTHS_SHORT = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
 
 export default function Dashboard() {
   const { transactions, exchangeRate, setExchangeRate, removeTransaction } = useFinanceStore();
   const [refreshing, setRefreshing] = useState(false);
+
+  const now = new Date();
+  const [filterMonth, setFilterMonth] = useState<number>(now.getMonth());
+  const [filterYear, setFilterYear] = useState<number>(now.getFullYear());
+  const [allTime, setAllTime] = useState(false);
+
+  const availableYears = [
+    ...new Set([
+      now.getFullYear(),
+      ...transactions.map(t => new Date(t.date).getFullYear()),
+    ]),
+  ].sort((a, b) => b - a);
+
+  const periodTransactions = allTime
+    ? transactions
+    : transactions.filter(t => {
+        const d = new Date(t.date);
+        return d.getMonth() === filterMonth && d.getFullYear() === filterYear;
+      });
 
   const toARS = (amount: number, currency: 'ARS' | 'USD') =>
     currency === 'USD' ? amount * exchangeRate : amount;
@@ -18,20 +40,22 @@ export default function Dashboard() {
   const formatM = (v: number) =>
     new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(v);
 
-  const formatDate = (iso: string) =>
-    new Date(iso).toLocaleDateString('es-AR', { day: '2-digit', month: 'short' });
+  const formatDate = (iso: string) => {
+    const d = new Date(iso);
+    return `${d.getDate()} ${MONTHS_SHORT[d.getMonth()]}`;
+  };
 
-  const totalIngresos = transactions
+  const totalIngresos = periodTransactions
     .filter(t => t.type === 'income')
     .reduce((acc, t) => acc + toARS(t.amount, t.currency), 0);
 
-  const totalGastos = transactions
+  const totalGastos = periodTransactions
     .filter(t => t.type === 'expense')
     .reduce((acc, t) => acc + toARS(t.amount, t.currency), 0);
 
   const balance = totalIngresos - totalGastos;
 
-  const chartData = transactions
+  const chartData = periodTransactions
     .filter(t => t.type === 'expense')
     .reduce((acc: { name: string; value: number }[], curr) => {
       const val = toARS(curr.amount, curr.currency);
@@ -44,9 +68,9 @@ export default function Dashboard() {
   const COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#ef4444'];
 
   const methodColor: Record<string, string> = {
-    'Efectivo':  'bg-emerald-500/10 text-emerald-400',
-    'Débito':    'bg-blue-500/10 text-blue-400',
-    'Crédito':   'bg-purple-500/10 text-purple-400',
+    'Efectivo': 'bg-emerald-500/10 text-emerald-400',
+    'Débito':   'bg-blue-500/10 text-blue-400',
+    'Crédito':  'bg-purple-500/10 text-purple-400',
   };
 
   const handleRefreshDolar = async () => {
@@ -59,12 +83,60 @@ export default function Dashboard() {
   return (
     <div className="p-10 space-y-10">
 
+      {/* SELECTOR DE PERÍODO */}
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="flex items-center gap-2 text-slate-500">
+          <CalendarDays size={16} />
+          <span className="text-xs font-bold uppercase tracking-widest">Período</span>
+        </div>
+        <div className="flex bg-slate-900 border border-white/10 p-1 rounded-2xl gap-1">
+          <button
+            onClick={() => setAllTime(false)}
+            className={`px-4 py-2 rounded-xl text-xs font-black uppercase transition-all ${!allTime ? 'bg-emerald-500 text-white' : 'text-slate-500 hover:text-white'}`}
+          >
+            Mensual
+          </button>
+          <button
+            onClick={() => setAllTime(true)}
+            className={`px-4 py-2 rounded-xl text-xs font-black uppercase transition-all ${allTime ? 'bg-emerald-500 text-white' : 'text-slate-500 hover:text-white'}`}
+          >
+            Todo
+          </button>
+        </div>
+        {!allTime && (
+          <>
+            <select
+              value={filterMonth}
+              onChange={e => setFilterMonth(Number(e.target.value))}
+              className="bg-slate-900 border border-white/10 text-white text-xs font-bold px-4 py-2.5 rounded-2xl outline-none focus:border-emerald-500/50 transition-all"
+            >
+              {MONTHS.map((m, i) => (
+                <option key={m} value={i} className="bg-slate-900">{m}</option>
+              ))}
+            </select>
+            <select
+              value={filterYear}
+              onChange={e => setFilterYear(Number(e.target.value))}
+              className="bg-slate-900 border border-white/10 text-white text-xs font-bold px-4 py-2.5 rounded-2xl outline-none focus:border-emerald-500/50 transition-all"
+            >
+              {availableYears.map(y => (
+                <option key={y} value={y} className="bg-slate-900">{y}</option>
+              ))}
+            </select>
+          </>
+        )}
+        <span className="text-[10px] text-slate-600 ml-1">
+          {periodTransactions.length} movimientos
+          {!allTime && ` en ${MONTHS[filterMonth]} ${filterYear}`}
+        </span>
+      </div>
+
       {/* KPI CARDS */}
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-6">
 
         <div className="bg-slate-900 p-7 rounded-[2.5rem] border border-white/10 flex flex-col gap-4">
           <div className="flex items-center justify-between">
-            <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Balance Total</p>
+            <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Balance</p>
             <div className="p-2 bg-emerald-500/10 rounded-xl">
               <Wallet size={18} className="text-emerald-400" />
             </div>
@@ -77,43 +149,40 @@ export default function Dashboard() {
 
         <div className="bg-slate-900 p-7 rounded-[2.5rem] border border-white/10 flex flex-col gap-4">
           <div className="flex items-center justify-between">
-            <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Total Ingresos</p>
+            <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Ingresos</p>
             <div className="p-2 bg-blue-500/10 rounded-xl">
               <TrendingUp size={18} className="text-blue-400" />
             </div>
           </div>
           <p className="text-3xl font-black tracking-tight text-white">{formatM(totalIngresos)}</p>
           <p className="text-[10px] text-slate-600">
-            {transactions.filter(t => t.type === 'income').length} movimientos
+            {periodTransactions.filter(t => t.type === 'income').length} movimientos
           </p>
         </div>
 
         <div className="bg-slate-900 p-7 rounded-[2.5rem] border border-white/10 flex flex-col gap-4">
           <div className="flex items-center justify-between">
-            <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Total Gastos</p>
+            <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Gastos</p>
             <div className="p-2 bg-rose-500/10 rounded-xl">
               <TrendingDown size={18} className="text-rose-400" />
             </div>
           </div>
           <p className="text-3xl font-black tracking-tight text-white">{formatM(totalGastos)}</p>
           <p className="text-[10px] text-slate-600">
-            {transactions.filter(t => t.type === 'expense').length} movimientos
+            {periodTransactions.filter(t => t.type === 'expense').length} movimientos
           </p>
         </div>
 
         <div className="bg-slate-900 p-7 rounded-[2.5rem] border border-white/10 flex flex-col gap-4">
           <div className="flex items-center justify-between">
-            <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Cotización USD/ARS</p>
+            <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">USD / ARS</p>
             <div className="flex items-center gap-2">
               <button
                 onClick={handleRefreshDolar}
                 title="Actualizar con dólar blue real"
                 className="p-2 bg-amber-500/10 rounded-xl hover:bg-amber-500/20 transition-all"
               >
-                <RefreshCw
-                  size={18}
-                  className={`text-amber-400 ${refreshing ? 'animate-spin' : ''}`}
-                />
+                <RefreshCw size={16} className={`text-amber-400 ${refreshing ? 'animate-spin' : ''}`} />
               </button>
               <div className="p-2 bg-amber-500/10 rounded-xl">
                 <DollarSign size={18} className="text-amber-400" />
@@ -143,7 +212,7 @@ export default function Dashboard() {
           </p>
           {chartData.length === 0 ? (
             <div className="h-[260px] flex items-center justify-center text-slate-600 italic text-sm">
-              Sin gastos registrados todavía
+              Sin gastos en este período
             </div>
           ) : (
             <ResponsiveContainer width="100%" height={260}>
@@ -177,24 +246,23 @@ export default function Dashboard() {
           <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-6">
             Últimos Movimientos
           </p>
-          {transactions.length === 0 ? (
+          {periodTransactions.length === 0 ? (
             <div className="h-[260px] flex items-center justify-center text-slate-600 italic text-sm">
-              Sin movimientos registrados todavía
+              Sin movimientos en este período
             </div>
           ) : (
             <div className="space-y-3 max-h-[300px] overflow-y-auto pr-2">
-              {transactions.slice(0, 20).map((t) => (
+              {periodTransactions.slice(0, 20).map((t) => (
                 <div
                   key={t.id}
                   className="flex items-center justify-between p-4 bg-white/5 rounded-2xl hover:bg-white/10 transition-all group"
                 >
                   <div className="flex items-center gap-4">
                     <div className={`p-2 rounded-xl ${t.type === 'income' ? 'bg-emerald-500/10' : 'bg-rose-500/10'}`}>
-                      {t.type === 'income' ? (
-                        <ArrowUpCircle size={20} className="text-emerald-400" />
-                      ) : (
-                        <ArrowDownCircle size={20} className="text-rose-400" />
-                      )}
+                      {t.type === 'income'
+                        ? <ArrowUpCircle size={20} className="text-emerald-400" />
+                        : <ArrowDownCircle size={20} className="text-rose-400" />
+                      }
                     </div>
                     <div>
                       <p className="font-bold text-white text-sm leading-tight">{t.description}</p>
@@ -218,7 +286,6 @@ export default function Dashboard() {
                       </div>
                     </div>
                   </div>
-
                   <div className="flex items-center gap-3">
                     <div className="text-right">
                       <p className={`font-black text-sm ${t.type === 'income' ? 'text-emerald-400' : 'text-rose-400'}`}>
