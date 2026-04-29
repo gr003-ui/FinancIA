@@ -4,6 +4,7 @@ import { useFinanceStore } from '../../store/useFinanceStore';
 import { Plus, Trash2, Receipt, ToggleLeft, ToggleRight } from 'lucide-react';
 import TransactionForm from '../../components/TransactionForm';
 import CardCredit from '../../components/CardCredit';
+import AlertsPanel from '../../components/AlertsPanel';
 
 const GRADIENTS = [
   'from-emerald-600 to-emerald-900',
@@ -22,13 +23,13 @@ export default function TarjetasPage() {
     limitInst: '',
     type: 'Crédito' as 'Crédito' | 'Débito',
     singleLimit: false,
+    closingDay: '',
+    dueDay: '',
   });
 
   const formatM = (v: number) =>
     new Intl.NumberFormat('es-AR', {
-      style: 'currency',
-      currency: 'ARS',
-      maximumFractionDigits: 0,
+      style: 'currency', currency: 'ARS', maximumFractionDigits: 0,
     }).format(v);
 
   const handleAddCard = () => {
@@ -39,14 +40,14 @@ export default function TarjetasPage() {
       bank: newCard.bank,
       type: newCard.type,
       singleLimit: newCard.type === 'Débito' ? true : newCard.singleLimit,
-      limitOnePayment: newCard.type === 'Débito' ? 0 : Number(newCard.limitOne),
-      limitInstallments:
-        newCard.type === 'Crédito' && !newCard.singleLimit
-          ? Number(newCard.limitInst)
-          : 0,
+      limitOnePayment:   newCard.type === 'Débito' ? 0 : Number(newCard.limitOne),
+      limitInstallments: newCard.type === 'Crédito' && !newCard.singleLimit
+        ? Number(newCard.limitInst) : 0,
+      closingDay: newCard.closingDay ? Number(newCard.closingDay) : undefined,
+      dueDay:     newCard.dueDay     ? Number(newCard.dueDay)     : undefined,
     });
     setShowAdd(false);
-    setNewCard({ bank: '', limitOne: '', limitInst: '', type: 'Crédito', singleLimit: false });
+    setNewCard({ bank: '', limitOne: '', limitInst: '', type: 'Crédito', singleLimit: false, closingDay: '', dueDay: '' });
   };
 
   const installmentTxs = transactions.filter(
@@ -57,18 +58,18 @@ export default function TarjetasPage() {
     <main className="p-10 grid grid-cols-1 lg:grid-cols-12 gap-10">
       <div className="lg:col-span-8 space-y-8">
 
-        {/* Header */}
         <div className="flex justify-between items-center">
-          <h1 className="text-5xl font-black tracking-tighter text-white">
-            Mis Tarjetas
-          </h1>
+          <h1 className="text-5xl font-black tracking-tighter text-white">Mis Tarjetas</h1>
           <button
             onClick={() => setShowAdd(!showAdd)}
-            className="bg-emerald-500 text-white px-8 py-4 rounded-2xl font-black flex gap-2 items-center shadow-lg shadow-emerald-500/20 hover:bg-emerald-400 transition-all focus:outline-none focus:ring-2 focus:ring-emerald-300"
+            className="bg-emerald-500 text-white px-8 py-4 rounded-2xl font-black flex gap-2 items-center shadow-lg shadow-emerald-500/20 hover:bg-emerald-400 transition-all"
           >
             <Plus size={18} /> {showAdd ? 'CERRAR' : 'NUEVA TARJETA'}
           </button>
         </div>
+
+        {/* Alertas */}
+        <AlertsPanel />
 
         {/* Formulario nueva tarjeta */}
         {showAdd && (
@@ -79,27 +80,20 @@ export default function TarjetasPage() {
               className="w-full p-5 bg-white/5 border border-white/10 rounded-2xl outline-none font-bold text-white placeholder:text-slate-500 focus:border-emerald-500 transition-all"
               value={newCard.bank}
               onChange={(e) => setNewCard({ ...newCard, bank: e.target.value })}
-              onKeyDown={(e) => e.key === 'Enter' && handleAddCard()}
             />
 
-            {/* Tipo de tarjeta */}
+            {/* Tipo */}
             <div className="space-y-2">
               <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">
                 Tipo de tarjeta
               </p>
               <div className="flex bg-white/5 p-1 rounded-2xl gap-1">
                 {(['Crédito', 'Débito'] as const).map((t) => (
-                  <button
-                    key={t}
-                    type="button"
-                    onClick={() =>
-                      setNewCard({ ...newCard, type: t, singleLimit: false })
-                    }
-                    className={`flex-1 p-3 rounded-xl font-bold text-sm transition-all focus:outline-none focus:ring-2 focus:ring-white/30 ${
+                  <button key={t} type="button"
+                    onClick={() => setNewCard({ ...newCard, type: t, singleLimit: false })}
+                    className={`flex-1 p-3 rounded-xl font-bold text-sm transition-all ${
                       newCard.type === t
-                        ? t === 'Crédito'
-                          ? 'bg-purple-500 text-white'
-                          : 'bg-blue-500 text-white'
+                        ? t === 'Crédito' ? 'bg-purple-500 text-white' : 'bg-blue-500 text-white'
                         : 'text-slate-400 hover:text-white'
                     }`}
                   >
@@ -109,52 +103,27 @@ export default function TarjetasPage() {
               </div>
             </div>
 
-            {/* Débito: sin límites */}
             {newCard.type === 'Débito' && (
               <div className="bg-blue-500/5 border border-blue-500/20 rounded-2xl p-4 text-xs text-blue-400 font-bold">
-                Las tarjetas de débito no tienen límite mensual propio. El saldo disponible
-                se calcula a partir de tus ingresos mensuales menos los gastos registrados.
+                Las tarjetas de débito no tienen límite mensual propio.
               </div>
             )}
 
-            {/* Crédito: opciones de límite */}
             {newCard.type === 'Crédito' && (
               <>
-                {/* Toggle límite único / dual */}
-                <button
-                  type="button"
-                  onClick={() =>
-                    setNewCard({ ...newCard, singleLimit: !newCard.singleLimit })
-                  }
-                  className={`w-full flex items-center justify-between p-4 rounded-2xl border font-bold text-sm transition-all focus:outline-none focus:ring-2 focus:ring-white/20 ${
+                <button type="button"
+                  onClick={() => setNewCard({ ...newCard, singleLimit: !newCard.singleLimit })}
+                  className={`w-full flex items-center justify-between p-4 rounded-2xl border font-bold text-sm transition-all ${
                     newCard.singleLimit
                       ? 'border-blue-500/50 bg-blue-500/10 text-blue-400'
                       : 'border-white/10 bg-white/5 text-slate-400'
                   }`}
                 >
-                  <span>
-                    {newCard.singleLimit
-                      ? '✓ Límite único para todo'
-                      : 'Límite dual (1 pago + cuotas)'}
-                  </span>
-                  {newCard.singleLimit ? (
-                    <ToggleRight size={22} className="text-blue-400" />
-                  ) : (
-                    <ToggleLeft size={22} className="text-slate-500" />
-                  )}
-                </button>
-
-                <div
-                  className={`text-xs px-4 py-3 rounded-2xl border ${
-                    newCard.singleLimit
-                      ? 'bg-blue-500/5 border-blue-500/20 text-blue-400'
-                      : 'bg-white/5 border-white/10 text-slate-500'
-                  }`}
-                >
+                  <span>{newCard.singleLimit ? '✓ Límite único para todo' : 'Límite dual (1 pago + cuotas)'}</span>
                   {newCard.singleLimit
-                    ? 'Un solo límite disponible para compras en 1 pago y en cuotas. Ej: Visa Débito o tarjetas simples.'
-                    : 'Límite separado para 1 pago y para cuotas. Las compras reducen AMBOS límites proporcionalmente. Ej: Mastercard con sub-límite.'}
-                </div>
+                    ? <ToggleRight size={22} className="text-blue-400" />
+                    : <ToggleLeft  size={22} className="text-slate-500" />}
+                </button>
 
                 <input
                   placeholder={newCard.singleLimit ? 'Límite disponible total' : 'Límite 1 Pago'}
@@ -166,20 +135,46 @@ export default function TarjetasPage() {
 
                 {!newCard.singleLimit && (
                   <input
-                    placeholder="Sub-límite Cuotas (menor o igual al límite 1 pago)"
+                    placeholder="Sub-límite Cuotas"
                     type="number"
                     className="w-full p-5 bg-white/5 border border-white/10 rounded-2xl outline-none font-bold text-white placeholder:text-slate-500 focus:border-emerald-500 transition-all"
                     value={newCard.limitInst}
                     onChange={(e) => setNewCard({ ...newCard, limitInst: e.target.value })}
                   />
                 )}
+
+                {/* Fechas de cierre y vencimiento */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-500 ml-2 uppercase">
+                      Día de Cierre (opcional)
+                    </label>
+                    <input
+                      type="number" min="1" max="31"
+                      placeholder="Ej: 15"
+                      className="w-full p-4 bg-white/5 border border-white/10 rounded-2xl outline-none font-bold text-white placeholder:text-slate-600 focus:border-emerald-500 transition-all text-center"
+                      value={newCard.closingDay}
+                      onChange={(e) => setNewCard({ ...newCard, closingDay: e.target.value })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-500 ml-2 uppercase">
+                      Día de Vencimiento (opcional)
+                    </label>
+                    <input
+                      type="number" min="1" max="31"
+                      placeholder="Ej: 5"
+                      className="w-full p-4 bg-white/5 border border-white/10 rounded-2xl outline-none font-bold text-white placeholder:text-slate-600 focus:border-emerald-500 transition-all text-center"
+                      value={newCard.dueDay}
+                      onChange={(e) => setNewCard({ ...newCard, dueDay: e.target.value })}
+                    />
+                  </div>
+                </div>
               </>
             )}
 
-            <button
-              onClick={handleAddCard}
-              className="w-full bg-emerald-500 text-white p-6 rounded-2xl font-black uppercase hover:bg-emerald-400 transition-all shadow-lg shadow-emerald-500/20 focus:outline-none focus:ring-2 focus:ring-emerald-300"
-            >
+            <button onClick={handleAddCard}
+              className="w-full bg-emerald-500 text-white p-6 rounded-2xl font-black uppercase hover:bg-emerald-400 transition-all shadow-lg shadow-emerald-500/20">
               Guardar Tarjeta
             </button>
           </div>
@@ -197,7 +192,7 @@ export default function TarjetasPage() {
               <CardCredit card={card} gradient={GRADIENTS[index % GRADIENTS.length]} />
               <button
                 onClick={() => removeCard(card.id)}
-                className="absolute top-5 right-5 opacity-0 group-hover:opacity-100 transition-opacity bg-black/30 hover:bg-rose-500 text-white p-2 rounded-xl focus:outline-none focus:opacity-100 focus:ring-2 focus:ring-rose-400"
+                className="absolute top-5 right-5 opacity-0 group-hover:opacity-100 transition-opacity bg-black/30 hover:bg-rose-500 text-white p-2 rounded-xl"
               >
                 <Trash2 size={16} />
               </button>
@@ -205,48 +200,38 @@ export default function TarjetasPage() {
           ))}
         </div>
 
-        {/* Cuotas en curso */}
         {installmentTxs.length > 0 && (
           <div className="space-y-4">
             <div className="flex items-center gap-3">
               <Receipt size={18} className="text-purple-400" />
-              <h2 className="text-xl font-black text-white tracking-tight">
-                Cuotas en Curso
-              </h2>
+              <h2 className="text-xl font-black text-white tracking-tight">Cuotas en Curso</h2>
               <span className="text-[10px] font-black bg-purple-500/10 text-purple-400 px-2 py-0.5 rounded-full">
                 {installmentTxs.length}
               </span>
             </div>
             <div className="space-y-3">
               {installmentTxs.map((t) => {
-                const card = cards.find((c) => c.id === t.cardId);
-                const progress = (t.currentInstallment / t.installments) * 100;
-                const remaining = t.installments - t.currentInstallment;
+                const card   = cards.find((c) => c.id === t.cardId);
+                const progress    = (t.currentInstallment / t.installments) * 100;
+                const remaining   = t.installments - t.currentInstallment;
                 const cuotaAmount = t.amount / t.installments;
                 return (
-                  <div
-                    key={t.id}
-                    className="bg-slate-900 border border-white/10 p-5 rounded-[2rem] flex flex-col gap-3"
-                  >
+                  <div key={t.id}
+                    className="bg-slate-900 border border-white/10 p-5 rounded-[2rem] flex flex-col gap-3">
                     <div className="flex items-start justify-between">
                       <div>
                         <p className="font-bold text-white text-sm">{t.description}</p>
-                        {card && (
-                          <p className="text-[10px] text-slate-500 mt-0.5">{card.bank}</p>
-                        )}
+                        {card && <p className="text-[10px] text-slate-500 mt-0.5">{card.bank}</p>}
                       </div>
                       <div className="text-right">
                         <p className="font-black text-purple-400 text-sm">
                           {t.currency === 'USD'
                             ? `U$S ${cuotaAmount.toLocaleString('es-AR', { maximumFractionDigits: 2 })}`
                             : formatM(cuotaAmount)}
-                          <span className="text-slate-600 font-normal text-[10px] ml-1">
-                            / mes
-                          </span>
+                          <span className="text-slate-600 font-normal text-[10px] ml-1">/ mes</span>
                         </p>
                         <p className="text-[10px] text-slate-600 mt-0.5">
-                          total:{' '}
-                          {t.currency === 'USD' ? `U$S ${t.amount}` : formatM(t.amount)}
+                          total: {t.currency === 'USD' ? `U$S ${t.amount}` : formatM(t.amount)}
                         </p>
                       </div>
                     </div>
@@ -256,10 +241,8 @@ export default function TarjetasPage() {
                         <span>{remaining > 0 ? `Faltan ${remaining}` : 'Última cuota'}</span>
                       </div>
                       <div className="w-full bg-white/10 h-1.5 rounded-full overflow-hidden">
-                        <div
-                          className="bg-purple-400 h-full transition-all duration-700"
-                          style={{ width: `${progress}%` }}
-                        />
+                        <div className="bg-purple-400 h-full transition-all duration-700"
+                          style={{ width: `${progress}%` }} />
                       </div>
                     </div>
                   </div>
@@ -268,6 +251,7 @@ export default function TarjetasPage() {
             </div>
           </div>
         )}
+
       </div>
 
       <div className="lg:col-span-4 h-fit sticky top-10">

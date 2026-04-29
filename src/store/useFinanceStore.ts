@@ -13,6 +13,8 @@ export interface Card {
   limitInstallments: number;
   availableOnePayment: number;
   availableInstallments: number;
+  closingDay?: number; // día del mes en que cierra el resumen
+  dueDay?: number;     // día del mes en que vence el pago
 }
 
 export interface Transaction {
@@ -43,12 +45,6 @@ interface FinanceState {
   resetAll: () => void;
 }
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-/**
- * Meses transcurridos entre la fecha de la transacción y hoy.
- * Se usa para saber cuántas cuotas ya fueron "pagadas" en meses pasados.
- */
 function monthsPassedSince(dateISO: string): number {
   const txDate = new Date(dateISO);
   const now = new Date();
@@ -59,11 +55,6 @@ function monthsPassedSince(dateISO: string): number {
   );
 }
 
-/**
- * Monto efectivo a descontar del límite de tarjeta al registrar un gasto.
- * Para cuotas: descuenta solo las cuotas aún no vencidas.
- * Para 1 pago: descuenta el total.
- */
 function effectiveCardDeduction(
   amountInARS: number,
   installments: number,
@@ -76,14 +67,9 @@ function effectiveCardDeduction(
   return (amountInARS * remaining) / installments;
 }
 
-/**
- * Aplica el descuento al card según su tipo de límite.
- * - singleLimit: descuenta todo de availableOnePayment
- * - dual: descuenta proporcionalmente de ambos límites
- */
 function applyDeductionToCard(card: Card, deduction: number): Card {
   if (deduction <= 0) return card;
-  if (card.type === 'Débito') return card; // débito no tiene límite
+  if (card.type === 'Débito') return card;
 
   if (card.singleLimit) {
     return {
@@ -92,24 +78,19 @@ function applyDeductionToCard(card: Card, deduction: number): Card {
     };
   }
 
-  // Límite dual proporcional
   const totalAvail = card.availableOnePayment + card.availableInstallments;
   if (totalAvail <= 0) return card;
 
-  const ratioOne = card.availableOnePayment / totalAvail;
+  const ratioOne  = card.availableOnePayment   / totalAvail;
   const ratioInst = card.availableInstallments / totalAvail;
 
   return {
     ...card,
-    availableOnePayment: Math.max(0, card.availableOnePayment - deduction * ratioOne),
+    availableOnePayment:   Math.max(0, card.availableOnePayment   - deduction * ratioOne),
     availableInstallments: Math.max(0, card.availableInstallments - deduction * ratioInst),
   };
 }
 
-/**
- * Restaura al card el monto que fue descontado al eliminar una transacción.
- * Usa la misma lógica proporcional pero a la inversa (con los límites máximos como techo).
- */
 function applyRestorationToCard(card: Card, deduction: number): Card {
   if (deduction <= 0) return card;
   if (card.type === 'Débito') return card;
@@ -117,33 +98,22 @@ function applyRestorationToCard(card: Card, deduction: number): Card {
   if (card.singleLimit) {
     return {
       ...card,
-      availableOnePayment: Math.min(
-        card.limitOnePayment,
-        card.availableOnePayment + deduction
-      ),
+      availableOnePayment: Math.min(card.limitOnePayment, card.availableOnePayment + deduction),
     };
   }
 
   const totalLimit = card.limitOnePayment + card.limitInstallments;
   if (totalLimit <= 0) return card;
 
-  const ratioOne = card.limitOnePayment / totalLimit;
+  const ratioOne  = card.limitOnePayment   / totalLimit;
   const ratioInst = card.limitInstallments / totalLimit;
 
   return {
     ...card,
-    availableOnePayment: Math.min(
-      card.limitOnePayment,
-      card.availableOnePayment + deduction * ratioOne
-    ),
-    availableInstallments: Math.min(
-      card.limitInstallments,
-      card.availableInstallments + deduction * ratioInst
-    ),
+    availableOnePayment:   Math.min(card.limitOnePayment,   card.availableOnePayment   + deduction * ratioOne),
+    availableInstallments: Math.min(card.limitInstallments, card.availableInstallments + deduction * ratioInst),
   };
 }
-
-// ─── Store ────────────────────────────────────────────────────────────────────
 
 export const useFinanceStore = create<FinanceState>()(
   persist(
@@ -154,7 +124,7 @@ export const useFinanceStore = create<FinanceState>()(
       userName: 'Usuario FinancIA',
 
       setExchangeRate: (rate) => set({ exchangeRate: rate }),
-      setUserName: (name) => set({ userName: name }),
+      setUserName:     (name) => set({ userName: name }),
 
       addCard: (card) =>
         set((state) => ({
@@ -163,16 +133,14 @@ export const useFinanceStore = create<FinanceState>()(
             {
               ...card,
               id: generateId(),
-              availableOnePayment: card.limitOnePayment,
+              availableOnePayment:   card.limitOnePayment,
               availableInstallments: card.singleLimit ? 0 : card.limitInstallments,
             },
           ],
         })),
 
       removeCard: (id) =>
-        set((state) => ({
-          cards: state.cards.filter((c) => c.id !== id),
-        })),
+        set((state) => ({ cards: state.cards.filter((c) => c.id !== id) })),
 
       addTransaction: (tx) =>
         set((state) => {
@@ -187,18 +155,12 @@ export const useFinanceStore = create<FinanceState>()(
               tx.installments || 1,
               tx.date
             );
-
             updatedCards = state.cards.map((card) =>
-              card.id === tx.cardId
-                ? applyDeductionToCard(card, deduction)
-                : card
+              card.id === tx.cardId ? applyDeductionToCard(card, deduction) : card
             );
           }
 
-          return {
-            transactions: [newTx, ...state.transactions],
-            cards: updatedCards,
-          };
+          return { transactions: [newTx, ...state.transactions], cards: updatedCards };
         }),
 
       removeTransaction: (id) =>
@@ -216,11 +178,8 @@ export const useFinanceStore = create<FinanceState>()(
               tx.installments || 1,
               tx.date
             );
-
             updatedCards = state.cards.map((card) =>
-              card.id === tx.cardId
-                ? applyRestorationToCard(card, deduction)
-                : card
+              card.id === tx.cardId ? applyRestorationToCard(card, deduction) : card
             );
           }
 
@@ -235,7 +194,7 @@ export const useFinanceStore = create<FinanceState>()(
           transactions: [],
           cards: state.cards.map((card) => ({
             ...card,
-            availableOnePayment: card.limitOnePayment,
+            availableOnePayment:   card.limitOnePayment,
             availableInstallments: card.singleLimit ? 0 : card.limitInstallments,
           })),
         })),
@@ -244,14 +203,22 @@ export const useFinanceStore = create<FinanceState>()(
   )
 );
 
-/**
- * Monto mensual efectivo de una transacción para el cálculo del balance.
- * Gastos en cuotas → amount / installments (solo lo que paga este mes).
- * Todo lo demás → amount completo.
- */
 export function getMonthlyAmount(t: Transaction): number {
   if (t.type === 'expense' && t.installments > 1) {
     return t.amount / t.installments;
   }
   return t.amount;
+}
+
+// Devuelve los días que faltan para el próximo vencimiento/cierre de una tarjeta
+export function getDaysUntil(day: number): number {
+  const now   = new Date();
+  const today = now.getDate();
+  const thisMonth = new Date(now.getFullYear(), now.getMonth(), day);
+  if (day >= today) {
+    return Math.ceil((thisMonth.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+  }
+  // Ya pasó este mes → calcular para el mes que viene
+  const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, day);
+  return Math.ceil((nextMonth.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
 }
