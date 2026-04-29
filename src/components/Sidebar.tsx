@@ -1,26 +1,33 @@
 "use client";
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, CreditCard, BrainCircuit, Settings, Wallet, ListOrdered, AlertTriangle } from 'lucide-react';
+import {
+  LayoutDashboard, CreditCard, BrainCircuit,
+  Settings, Wallet, ListOrdered, AlertTriangle,
+  TrendingUp,
+} from 'lucide-react';
 import { useFinanceStore } from '../store/useFinanceStore';
 
 const Sidebar = () => {
   const pathname = usePathname();
   const { cards } = useFinanceStore();
 
-  const hasLowLimit = cards.some(card => {
-    const percentFree = card.limitOnePayment > 0
-      ? (card.availableOnePayment / card.limitOnePayment) * 100
-      : 100;
+  const hasLowLimit = cards.some((card) => {
+    if (card.type === 'Débito') return false;
+    const percentFree =
+      card.limitOnePayment > 0
+        ? (card.availableOnePayment / card.limitOnePayment) * 100
+        : 100;
     return percentFree < 20;
   });
 
   const menuItems = [
-    { name: 'Inicio',       href: '/',              icon: LayoutDashboard, alert: false },
-    { name: 'Movimientos',  href: '/movimientos',   icon: ListOrdered,     alert: false },
-    { name: 'Tarjetas',     href: '/tarjetas',      icon: CreditCard,      alert: hasLowLimit },
-    { name: 'Analista IA',  href: '/ia',            icon: BrainCircuit,    alert: false },
-    { name: 'Configuración',href: '/configuracion', icon: Settings,        alert: false },
+    { name: 'Inicio',        href: '/',             icon: LayoutDashboard, alert: false },
+    { name: 'Movimientos',   href: '/movimientos',  icon: ListOrdered,     alert: false },
+    { name: 'Proyección',    href: '/proyeccion',   icon: TrendingUp,      alert: false },
+    { name: 'Tarjetas',      href: '/tarjetas',     icon: CreditCard,      alert: hasLowLimit },
+    { name: 'Analista IA',   href: '/ia',           icon: BrainCircuit,    alert: false },
+    { name: 'Configuración', href: '/configuracion',icon: Settings,        alert: false },
   ];
 
   return (
@@ -38,7 +45,9 @@ const Sidebar = () => {
               key={item.name}
               href={item.href}
               className={`flex items-center gap-3 p-4 rounded-2xl font-bold transition-all relative ${
-                isActive ? 'bg-emerald-500 text-white' : 'text-slate-400 hover:bg-slate-800 hover:text-white'
+                isActive
+                  ? 'bg-emerald-500 text-white'
+                  : 'text-slate-400 hover:bg-slate-800 hover:text-white'
               }`}
             >
               <Icon size={20} />
@@ -54,7 +63,9 @@ const Sidebar = () => {
         })}
       </nav>
       <div className="px-2 pt-6 border-t border-white/10">
-        <p className="text-[10px] text-slate-600 font-bold uppercase tracking-widest">FinancIA v1.0</p>
+        <p className="text-[10px] text-slate-600 font-bold uppercase tracking-widest">
+          FinancIA v1.0
+        </p>
       </div>
     </aside>
   );
