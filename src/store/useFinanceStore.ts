@@ -13,9 +13,34 @@ export interface Card {
   limitInstallments: number;
   availableOnePayment: number;
   availableInstallments: number;
-  closingDay?: number; // día del mes en que cierra el resumen
-  dueDay?: number;     // día del mes en que vence el pago
+  closingDay?: number;
+  dueDay?: number;
 }
+
+export type TransactionCategory =
+  | 'Alimentación'
+  | 'Transporte'
+  | 'Servicios'
+  | 'Salud'
+  | 'Entretenimiento'
+  | 'Indumentaria'
+  | 'Educación'
+  | 'Viajes'
+  | 'Hogar'
+  | 'Otros';
+
+export const CATEGORIES: TransactionCategory[] = [
+  'Alimentación',
+  'Transporte',
+  'Servicios',
+  'Salud',
+  'Entretenimiento',
+  'Indumentaria',
+  'Educación',
+  'Viajes',
+  'Hogar',
+  'Otros',
+];
 
 export interface Transaction {
   id: string;
@@ -25,6 +50,7 @@ export interface Transaction {
   method: 'Efectivo' | 'Débito' | 'Crédito';
   type: 'income' | 'expense';
   incomeType?: 'fixed' | 'variable';
+  category?: TransactionCategory;
   date: string;
   installments: number;
   currentInstallment: number;
@@ -61,29 +87,21 @@ function effectiveCardDeduction(
   txDateISO: string
 ): number {
   if (installments <= 1) return amountInARS;
-  const passed = monthsPassedSince(txDateISO);
+  const passed     = monthsPassedSince(txDateISO);
   const alreadyPaid = Math.min(passed, installments);
-  const remaining = installments - alreadyPaid;
+  const remaining  = installments - alreadyPaid;
   return (amountInARS * remaining) / installments;
 }
 
 function applyDeductionToCard(card: Card, deduction: number): Card {
-  if (deduction <= 0) return card;
-  if (card.type === 'Débito') return card;
-
+  if (deduction <= 0 || card.type === 'Débito') return card;
   if (card.singleLimit) {
-    return {
-      ...card,
-      availableOnePayment: Math.max(0, card.availableOnePayment - deduction),
-    };
+    return { ...card, availableOnePayment: Math.max(0, card.availableOnePayment - deduction) };
   }
-
   const totalAvail = card.availableOnePayment + card.availableInstallments;
   if (totalAvail <= 0) return card;
-
   const ratioOne  = card.availableOnePayment   / totalAvail;
   const ratioInst = card.availableInstallments / totalAvail;
-
   return {
     ...card,
     availableOnePayment:   Math.max(0, card.availableOnePayment   - deduction * ratioOne),
@@ -92,22 +110,14 @@ function applyDeductionToCard(card: Card, deduction: number): Card {
 }
 
 function applyRestorationToCard(card: Card, deduction: number): Card {
-  if (deduction <= 0) return card;
-  if (card.type === 'Débito') return card;
-
+  if (deduction <= 0 || card.type === 'Débito') return card;
   if (card.singleLimit) {
-    return {
-      ...card,
-      availableOnePayment: Math.min(card.limitOnePayment, card.availableOnePayment + deduction),
-    };
+    return { ...card, availableOnePayment: Math.min(card.limitOnePayment, card.availableOnePayment + deduction) };
   }
-
   const totalLimit = card.limitOnePayment + card.limitInstallments;
   if (totalLimit <= 0) return card;
-
   const ratioOne  = card.limitOnePayment   / totalLimit;
   const ratioInst = card.limitInstallments / totalLimit;
-
   return {
     ...card,
     availableOnePayment:   Math.min(card.limitOnePayment,   card.availableOnePayment   + deduction * ratioOne),
@@ -146,20 +156,14 @@ export const useFinanceStore = create<FinanceState>()(
         set((state) => {
           const newTx = { ...tx, id: generateId() };
           let updatedCards = [...state.cards];
-
           if (tx.type === 'expense' && tx.cardId && tx.method === 'Crédito') {
             const amountInARS =
               tx.currency === 'USD' ? tx.amount * state.exchangeRate : tx.amount;
-            const deduction = effectiveCardDeduction(
-              amountInARS,
-              tx.installments || 1,
-              tx.date
-            );
+            const deduction = effectiveCardDeduction(amountInARS, tx.installments || 1, tx.date);
             updatedCards = state.cards.map((card) =>
               card.id === tx.cardId ? applyDeductionToCard(card, deduction) : card
             );
           }
-
           return { transactions: [newTx, ...state.transactions], cards: updatedCards };
         }),
 
@@ -167,22 +171,15 @@ export const useFinanceStore = create<FinanceState>()(
         set((state) => {
           const tx = state.transactions.find((t) => t.id === id);
           if (!tx) return state;
-
           let updatedCards = [...state.cards];
-
           if (tx.type === 'expense' && tx.cardId && tx.method === 'Crédito') {
             const amountInARS =
               tx.currency === 'USD' ? tx.amount * state.exchangeRate : tx.amount;
-            const deduction = effectiveCardDeduction(
-              amountInARS,
-              tx.installments || 1,
-              tx.date
-            );
+            const deduction = effectiveCardDeduction(amountInARS, tx.installments || 1, tx.date);
             updatedCards = state.cards.map((card) =>
               card.id === tx.cardId ? applyRestorationToCard(card, deduction) : card
             );
           }
-
           return {
             transactions: state.transactions.filter((t) => t.id !== id),
             cards: updatedCards,
@@ -204,21 +201,17 @@ export const useFinanceStore = create<FinanceState>()(
 );
 
 export function getMonthlyAmount(t: Transaction): number {
-  if (t.type === 'expense' && t.installments > 1) {
-    return t.amount / t.installments;
-  }
+  if (t.type === 'expense' && t.installments > 1) return t.amount / t.installments;
   return t.amount;
 }
 
-// Devuelve los días que faltan para el próximo vencimiento/cierre de una tarjeta
 export function getDaysUntil(day: number): number {
   const now   = new Date();
   const today = now.getDate();
-  const thisMonth = new Date(now.getFullYear(), now.getMonth(), day);
   if (day >= today) {
+    const thisMonth = new Date(now.getFullYear(), now.getMonth(), day);
     return Math.ceil((thisMonth.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
   }
-  // Ya pasó este mes → calcular para el mes que viene
   const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, day);
   return Math.ceil((nextMonth.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
 }
