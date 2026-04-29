@@ -11,6 +11,7 @@ import {
   ArrowUpCircle, ArrowDownCircle, RefreshCw, Trash2, CalendarDays,
 } from 'lucide-react';
 import CategoryLineChart from '../components/CategoryLineChart';
+import MultiCurrencyBalance from '../components/MultiCurrencyBalance';
 
 const MONTHS       = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 const MONTHS_SHORT = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
@@ -23,13 +24,17 @@ const BarTooltip = ({
   label?: string;
 }) => {
   const fmt = (v: number) =>
-    new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(v);
+    new Intl.NumberFormat('es-AR', {
+      style: 'currency', currency: 'ARS', maximumFractionDigits: 0,
+    }).format(v);
   if (!active || !payload?.length) return null;
   return (
     <div className="bg-slate-800 border border-white/10 rounded-2xl p-4 text-xs shadow-xl">
       <p className="font-black text-white mb-2">{label}</p>
       {payload.map((p) => (
-        <p key={p.name} style={{ color: p.color }} className="font-bold">{p.name}: {fmt(p.value)}</p>
+        <p key={p.name} style={{ color: p.color }} className="font-bold">
+          {p.name}: {fmt(p.value)}
+        </p>
       ))}
     </div>
   );
@@ -52,7 +57,14 @@ export default function Dashboard() {
     currency === 'USD' ? amount * exchangeRate : amount;
 
   const formatM = (v: number) =>
-    new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(v);
+    new Intl.NumberFormat('es-AR', {
+      style: 'currency', currency: 'ARS', maximumFractionDigits: 0,
+    }).format(v);
+
+  const formatUSD = (v: number) =>
+    new Intl.NumberFormat('es-AR', {
+      style: 'currency', currency: 'USD', maximumFractionDigits: 2,
+    }).format(v);
 
   const formatDate = (iso: string) => {
     const d = new Date(iso);
@@ -74,7 +86,8 @@ export default function Dashboard() {
     .filter((t) => t.type === 'expense')
     .reduce((acc, t) => acc + toARS(getMonthlyAmount(t), t.currency), 0);
 
-  const balance = totalIngresos - totalGastos;
+  const balance    = totalIngresos - totalGastos;
+  const balanceUSD = balance / exchangeRate;
 
   const chartData = periodTx
     .filter((t) => t.type === 'expense')
@@ -157,15 +170,23 @@ export default function Dashboard() {
 
       {/* KPI CARDS */}
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-6">
-        <div className="bg-slate-900 p-7 rounded-[2.5rem] border border-white/10 flex flex-col gap-4">
+
+        {/* Balance — ahora muestra ARS + equivalente USD */}
+        <div className="bg-slate-900 p-7 rounded-[2.5rem] border border-white/10 flex flex-col gap-3">
           <div className="flex items-center justify-between">
             <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Balance</p>
-            <div className="p-2 bg-emerald-500/10 rounded-xl"><Wallet size={18} className="text-emerald-400" /></div>
+            <div className="p-2 bg-emerald-500/10 rounded-xl">
+              <Wallet size={18} className="text-emerald-400" />
+            </div>
           </div>
           <p className={`text-3xl font-black tracking-tight ${balance >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
             {formatM(balance)}
           </p>
-          <p className="text-[10px] text-slate-600">cuotas = valor mensual de la cuota</p>
+          <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-600">
+            <DollarSign size={10} />
+            <span>≈ {formatUSD(balanceUSD)}</span>
+          </div>
+          <p className="text-[10px] text-slate-600">cuotas = valor mensual</p>
         </div>
 
         <div className="bg-slate-900 p-7 rounded-[2.5rem] border border-white/10 flex flex-col gap-4">
@@ -174,7 +195,9 @@ export default function Dashboard() {
             <div className="p-2 bg-blue-500/10 rounded-xl"><TrendingUp size={18} className="text-blue-400" /></div>
           </div>
           <p className="text-3xl font-black tracking-tight text-white">{formatM(totalIngresos)}</p>
-          <p className="text-[10px] text-slate-600">{periodTx.filter((t) => t.type === 'income').length} movimientos</p>
+          <p className="text-[10px] text-slate-600">
+            {periodTx.filter((t) => t.type === 'income').length} movimientos
+          </p>
         </div>
 
         <div className="bg-slate-900 p-7 rounded-[2.5rem] border border-white/10 flex flex-col gap-4">
@@ -183,7 +206,9 @@ export default function Dashboard() {
             <div className="p-2 bg-rose-500/10 rounded-xl"><TrendingDown size={18} className="text-rose-400" /></div>
           </div>
           <p className="text-3xl font-black tracking-tight text-white">{formatM(totalGastos)}</p>
-          <p className="text-[10px] text-slate-600">{periodTx.filter((t) => t.type === 'expense').length} movimientos</p>
+          <p className="text-[10px] text-slate-600">
+            {periodTx.filter((t) => t.type === 'expense').length} movimientos
+          </p>
         </div>
 
         <div className="bg-slate-900 p-7 rounded-[2.5rem] border border-white/10 flex flex-col gap-4">
@@ -194,7 +219,9 @@ export default function Dashboard() {
                 className="p-2 bg-amber-500/10 rounded-xl hover:bg-amber-500/20 transition-all focus:outline-none focus:ring-2 focus:ring-amber-400">
                 <RefreshCw size={16} className={`text-amber-400 ${refreshing ? 'animate-spin' : ''}`} />
               </button>
-              <div className="p-2 bg-amber-500/10 rounded-xl"><DollarSign size={18} className="text-amber-400" /></div>
+              <div className="p-2 bg-amber-500/10 rounded-xl">
+                <DollarSign size={18} className="text-amber-400" />
+              </div>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -207,6 +234,13 @@ export default function Dashboard() {
           <p className="text-[10px] text-slate-600">editá o actualizá con el azul real</p>
         </div>
       </div>
+
+      {/* BALANCE MULTI-MONEDA */}
+      <MultiCurrencyBalance
+        filterMonth={filterMonth}
+        filterYear={filterYear}
+        allTime={allTime}
+      />
 
       {/* TORTA + MOVIMIENTOS */}
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-8">
@@ -287,7 +321,9 @@ export default function Dashboard() {
                     <div className="text-right">
                       <p className={`font-black text-sm ${t.type === 'income' ? 'text-emerald-400' : 'text-rose-400'}`}>
                         {t.type === 'income' ? '+' : '-'}
-                        {t.currency === 'USD' ? `U$S ${getMonthlyAmount(t).toLocaleString('es-AR')}` : formatM(getMonthlyAmount(t))}
+                        {t.currency === 'USD'
+                          ? `U$S ${getMonthlyAmount(t).toLocaleString('es-AR')}`
+                          : formatM(getMonthlyAmount(t))}
                       </p>
                       {t.installments > 1 && (
                         <p className="text-[10px] text-slate-600 mt-0.5">
@@ -295,7 +331,9 @@ export default function Dashboard() {
                         </p>
                       )}
                       {t.currency === 'USD' && t.installments <= 1 && (
-                        <p className="text-[10px] text-slate-600 mt-0.5">≈ {formatM(t.amount * exchangeRate)}</p>
+                        <p className="text-[10px] text-slate-600 mt-0.5">
+                          ≈ {formatM(t.amount * exchangeRate)}
+                        </p>
                       )}
                     </div>
                     <button onClick={() => removeTransaction(t.id)}
