@@ -6,6 +6,23 @@ const generateId = () =>
 
 export type AccentTheme = 'emerald' | 'blue' | 'purple' | 'rose' | 'amber' | 'cyan';
 
+export type TransactionCategory =
+  | 'Alimentación' | 'Transporte' | 'Servicios' | 'Salud'
+  | 'Entretenimiento' | 'Indumentaria' | 'Educación' | 'Viajes'
+  | 'Hogar' | 'Otros';
+
+export const CATEGORIES: TransactionCategory[] = [
+  'Alimentación','Transporte','Servicios','Salud',
+  'Entretenimiento','Indumentaria','Educación','Viajes','Hogar','Otros',
+];
+
+export interface Budget {
+  id: string;
+  category: TransactionCategory;
+  amount: number;        // límite mensual en ARS
+  currency: 'ARS' | 'USD';
+}
+
 export interface Card {
   id: string;
   bank: string;
@@ -18,16 +35,6 @@ export interface Card {
   closingDay?: number;
   dueDay?: number;
 }
-
-export type TransactionCategory =
-  | 'Alimentación' | 'Transporte' | 'Servicios' | 'Salud'
-  | 'Entretenimiento' | 'Indumentaria' | 'Educación' | 'Viajes'
-  | 'Hogar' | 'Otros';
-
-export const CATEGORIES: TransactionCategory[] = [
-  'Alimentación','Transporte','Servicios','Salud',
-  'Entretenimiento','Indumentaria','Educación','Viajes','Hogar','Otros',
-];
 
 export interface Transaction {
   id: string;
@@ -47,6 +54,7 @@ export interface Transaction {
 interface FinanceState {
   cards: Card[];
   transactions: Transaction[];
+  budgets: Budget[];
   exchangeRate: number;
   userName: string;
   accentTheme: AccentTheme;
@@ -54,6 +62,8 @@ interface FinanceState {
   removeCard: (id: string) => void;
   addTransaction: (tx: Omit<Transaction, 'id'>) => void;
   removeTransaction: (id: string) => void;
+  setBudget: (category: TransactionCategory, amount: number, currency: 'ARS' | 'USD') => void;
+  removeBudget: (category: TransactionCategory) => void;
   setExchangeRate: (rate: number) => void;
   setUserName: (name: string) => void;
   setAccentTheme: (theme: AccentTheme) => void;
@@ -70,9 +80,13 @@ function monthsPassedSince(dateISO: string): number {
   );
 }
 
-function effectiveCardDeduction(amountInARS: number, installments: number, txDateISO: string): number {
+function effectiveCardDeduction(
+  amountInARS: number,
+  installments: number,
+  txDateISO: string
+): number {
   if (installments <= 1) return amountInARS;
-  const passed     = monthsPassedSince(txDateISO);
+  const passed      = monthsPassedSince(txDateISO);
   const alreadyPaid = Math.min(passed, installments);
   return (amountInARS * (installments - alreadyPaid)) / installments;
 }
@@ -86,7 +100,7 @@ function applyDeductionToCard(card: Card, deduction: number): Card {
   if (total <= 0) return card;
   return {
     ...card,
-    availableOnePayment:   Math.max(0, card.availableOnePayment   - deduction * (card.availableOnePayment / total)),
+    availableOnePayment:   Math.max(0, card.availableOnePayment   - deduction * (card.availableOnePayment   / total)),
     availableInstallments: Math.max(0, card.availableInstallments - deduction * (card.availableInstallments / total)),
   };
 }
@@ -100,7 +114,7 @@ function applyRestorationToCard(card: Card, deduction: number): Card {
   if (total <= 0) return card;
   return {
     ...card,
-    availableOnePayment:   Math.min(card.limitOnePayment,   card.availableOnePayment   + deduction * (card.limitOnePayment / total)),
+    availableOnePayment:   Math.min(card.limitOnePayment,   card.availableOnePayment   + deduction * (card.limitOnePayment   / total)),
     availableInstallments: Math.min(card.limitInstallments, card.availableInstallments + deduction * (card.limitInstallments / total)),
   };
 }
@@ -110,6 +124,7 @@ export const useFinanceStore = create<FinanceState>()(
     (set) => ({
       cards:        [],
       transactions: [],
+      budgets:      [],
       exchangeRate: 1000,
       userName:     'Usuario FinancIA',
       accentTheme:  'emerald',
@@ -118,53 +133,83 @@ export const useFinanceStore = create<FinanceState>()(
       setUserName:     (name)  => set({ userName: name }),
       setAccentTheme:  (theme) => set({ accentTheme: theme }),
 
-      addCard: (card) => set((state) => ({
-        cards: [...state.cards, {
-          ...card,
-          id: generateId(),
-          availableOnePayment:   card.limitOnePayment,
-          availableInstallments: card.singleLimit ? 0 : card.limitInstallments,
-        }],
-      })),
+      setBudget: (category, amount, currency) =>
+        set((state) => {
+          const existing = state.budgets.find((b) => b.category === category);
+          if (existing) {
+            return {
+              budgets: state.budgets.map((b) =>
+                b.category === category ? { ...b, amount, currency } : b
+              ),
+            };
+          }
+          return {
+            budgets: [...state.budgets, { id: generateId(), category, amount, currency }],
+          };
+        }),
 
-      removeCard: (id) => set((state) => ({
-        cards: state.cards.filter((c) => c.id !== id),
-      })),
-
-      addTransaction: (tx) => set((state) => {
-        const newTx = { ...tx, id: generateId() };
-        let updatedCards = [...state.cards];
-        if (tx.type === 'expense' && tx.cardId && tx.method === 'Crédito') {
-          const amountInARS = tx.currency === 'USD' ? tx.amount * state.exchangeRate : tx.amount;
-          const deduction   = effectiveCardDeduction(amountInARS, tx.installments || 1, tx.date);
-          updatedCards = state.cards.map((c) => c.id === tx.cardId ? applyDeductionToCard(c, deduction) : c);
-        }
-        return { transactions: [newTx, ...state.transactions], cards: updatedCards };
-      }),
-
-      removeTransaction: (id) => set((state) => {
-        const tx = state.transactions.find((t) => t.id === id);
-        if (!tx) return state;
-        let updatedCards = [...state.cards];
-        if (tx.type === 'expense' && tx.cardId && tx.method === 'Crédito') {
-          const amountInARS = tx.currency === 'USD' ? tx.amount * state.exchangeRate : tx.amount;
-          const deduction   = effectiveCardDeduction(amountInARS, tx.installments || 1, tx.date);
-          updatedCards = state.cards.map((c) => c.id === tx.cardId ? applyRestorationToCard(c, deduction) : c);
-        }
-        return {
-          transactions: state.transactions.filter((t) => t.id !== id),
-          cards: updatedCards,
-        };
-      }),
-
-      resetAll: () => set((state) => ({
-        transactions: [],
-        cards: state.cards.map((card) => ({
-          ...card,
-          availableOnePayment:   card.limitOnePayment,
-          availableInstallments: card.singleLimit ? 0 : card.limitInstallments,
+      removeBudget: (category) =>
+        set((state) => ({
+          budgets: state.budgets.filter((b) => b.category !== category),
         })),
-      })),
+
+      addCard: (card) =>
+        set((state) => ({
+          cards: [
+            ...state.cards,
+            {
+              ...card,
+              id: generateId(),
+              availableOnePayment:   card.limitOnePayment,
+              availableInstallments: card.singleLimit ? 0 : card.limitInstallments,
+            },
+          ],
+        })),
+
+      removeCard: (id) =>
+        set((state) => ({ cards: state.cards.filter((c) => c.id !== id) })),
+
+      addTransaction: (tx) =>
+        set((state) => {
+          const newTx = { ...tx, id: generateId() };
+          let updatedCards = [...state.cards];
+          if (tx.type === 'expense' && tx.cardId && tx.method === 'Crédito') {
+            const amountInARS = tx.currency === 'USD' ? tx.amount * state.exchangeRate : tx.amount;
+            const deduction   = effectiveCardDeduction(amountInARS, tx.installments || 1, tx.date);
+            updatedCards = state.cards.map((c) =>
+              c.id === tx.cardId ? applyDeductionToCard(c, deduction) : c
+            );
+          }
+          return { transactions: [newTx, ...state.transactions], cards: updatedCards };
+        }),
+
+      removeTransaction: (id) =>
+        set((state) => {
+          const tx = state.transactions.find((t) => t.id === id);
+          if (!tx) return state;
+          let updatedCards = [...state.cards];
+          if (tx.type === 'expense' && tx.cardId && tx.method === 'Crédito') {
+            const amountInARS = tx.currency === 'USD' ? tx.amount * state.exchangeRate : tx.amount;
+            const deduction   = effectiveCardDeduction(amountInARS, tx.installments || 1, tx.date);
+            updatedCards = state.cards.map((c) =>
+              c.id === tx.cardId ? applyRestorationToCard(c, deduction) : c
+            );
+          }
+          return {
+            transactions: state.transactions.filter((t) => t.id !== id),
+            cards: updatedCards,
+          };
+        }),
+
+      resetAll: () =>
+        set((state) => ({
+          transactions: [],
+          cards: state.cards.map((card) => ({
+            ...card,
+            availableOnePayment:   card.limitOnePayment,
+            availableInstallments: card.singleLimit ? 0 : card.limitInstallments,
+          })),
+        })),
     }),
     { name: 'financia-storage-v8' }
   )
@@ -176,8 +221,8 @@ export function getMonthlyAmount(t: Transaction): number {
 }
 
 export function getDaysUntil(day: number): number {
-  const now   = new Date();
-  const today = now.getDate();
+  const now    = new Date();
+  const today  = now.getDate();
   const target = day >= today
     ? new Date(now.getFullYear(), now.getMonth(), day)
     : new Date(now.getFullYear(), now.getMonth() + 1, day);

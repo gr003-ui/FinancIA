@@ -2,32 +2,52 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
-  LayoutDashboard, CreditCard, BrainCircuit,
-  Settings, Wallet, ListOrdered, AlertTriangle,
-  TrendingUp, Upload,
+  LayoutDashboard, CreditCard, BrainCircuit, Settings,
+  Wallet, ListOrdered, AlertTriangle, TrendingUp,
+  Upload, Target,
 } from 'lucide-react';
-import { useFinanceStore } from '../store/useFinanceStore';
+import { useFinanceStore, getMonthlyAmount } from '../store/useFinanceStore';
 
 const Sidebar = () => {
   const pathname = usePathname();
-  const { cards } = useFinanceStore();
+  const { cards, budgets, transactions, exchangeRate } = useFinanceStore();
+
+  const now = new Date();
 
   const hasLowLimit = cards.some((card) => {
     if (card.type === 'Débito') return false;
-    const pct = card.limitOnePayment > 0
-      ? (card.availableOnePayment / card.limitOnePayment) * 100
-      : 100;
-    return pct < 20;
+    return card.limitOnePayment > 0 &&
+      (card.availableOnePayment / card.limitOnePayment) * 100 < 20;
+  });
+
+  const toARS = (amount: number, currency: 'ARS' | 'USD') =>
+    currency === 'USD' ? amount * exchangeRate : amount;
+
+  const periodExpenses = transactions.filter((t) => {
+    const d = new Date(t.date);
+    return (
+      t.type === 'expense' &&
+      d.getMonth() === now.getMonth() &&
+      d.getFullYear() === now.getFullYear()
+    );
+  });
+
+  const hasBudgetAlert = budgets.some((b) => {
+    const spent = periodExpenses
+      .filter((t) => (t.category ?? 'Otros') === b.category)
+      .reduce((s, t) => s + toARS(getMonthlyAmount(t), t.currency), 0);
+    return spent >= toARS(b.amount, b.currency) * 0.8;
   });
 
   const menuItems = [
-    { name: 'Inicio',        href: '/',             icon: LayoutDashboard, alert: false },
-    { name: 'Movimientos',   href: '/movimientos',  icon: ListOrdered,     alert: false },
-    { name: 'Proyección',    href: '/proyeccion',   icon: TrendingUp,      alert: false },
-    { name: 'Tarjetas',      href: '/tarjetas',     icon: CreditCard,      alert: hasLowLimit },
-    { name: 'Importar CSV',  href: '/importar',     icon: Upload,          alert: false },
-    { name: 'Analista IA',   href: '/ia',           icon: BrainCircuit,    alert: false },
-    { name: 'Configuración', href: '/configuracion',icon: Settings,        alert: false },
+    { name: 'Inicio',        href: '/',              icon: LayoutDashboard, alert: false },
+    { name: 'Movimientos',   href: '/movimientos',   icon: ListOrdered,     alert: false },
+    { name: 'Proyección',    href: '/proyeccion',    icon: TrendingUp,      alert: false },
+    { name: 'Presupuestos',  href: '/presupuestos',  icon: Target,          alert: hasBudgetAlert },
+    { name: 'Tarjetas',      href: '/tarjetas',      icon: CreditCard,      alert: hasLowLimit },
+    { name: 'Importar CSV',  href: '/importar',      icon: Upload,          alert: false },
+    { name: 'Analista IA',   href: '/ia',            icon: BrainCircuit,    alert: false },
+    { name: 'Configuración', href: '/configuracion', icon: Settings,        alert: false },
   ];
 
   return (
@@ -55,7 +75,6 @@ const Sidebar = () => {
               {item.alert && !isActive && (
                 <span className="ml-auto flex items-center gap-1 text-[10px] font-black text-amber-400 bg-amber-400/10 px-2 py-0.5 rounded-full">
                   <AlertTriangle size={10} />
-                  Límite
                 </span>
               )}
             </Link>
@@ -63,7 +82,9 @@ const Sidebar = () => {
         })}
       </nav>
       <div className="px-2 pt-6 border-t border-white/10">
-        <p className="text-[10px] text-slate-600 font-bold uppercase tracking-widest">FinancIA v1.0</p>
+        <p className="text-[10px] text-slate-600 font-bold uppercase tracking-widest">
+          FinancIA v1.0
+        </p>
       </div>
     </aside>
   );
