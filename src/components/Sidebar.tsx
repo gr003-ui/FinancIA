@@ -4,7 +4,7 @@ import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard, CreditCard, BrainCircuit,
   Settings, Wallet, ListOrdered, AlertTriangle,
-  TrendingUp,
+  TrendingUp, Upload,
 } from 'lucide-react';
 import { useFinanceStore } from '../store/useFinanceStore';
 
@@ -14,11 +14,10 @@ const Sidebar = () => {
 
   const hasLowLimit = cards.some((card) => {
     if (card.type === 'Débito') return false;
-    const percentFree =
-      card.limitOnePayment > 0
-        ? (card.availableOnePayment / card.limitOnePayment) * 100
-        : 100;
-    return percentFree < 20;
+    const pct = card.limitOnePayment > 0
+      ? (card.availableOnePayment / card.limitOnePayment) * 100
+      : 100;
+    return pct < 20;
   });
 
   const menuItems = [
@@ -26,6 +25,7 @@ const Sidebar = () => {
     { name: 'Movimientos',   href: '/movimientos',  icon: ListOrdered,     alert: false },
     { name: 'Proyección',    href: '/proyeccion',   icon: TrendingUp,      alert: false },
     { name: 'Tarjetas',      href: '/tarjetas',     icon: CreditCard,      alert: hasLowLimit },
+    { name: 'Importar CSV',  href: '/importar',     icon: Upload,          alert: false },
     { name: 'Analista IA',   href: '/ia',           icon: BrainCircuit,    alert: false },
     { name: 'Configuración', href: '/configuracion',icon: Settings,        alert: false },
   ];
@@ -38,7 +38,7 @@ const Sidebar = () => {
       </div>
       <nav className="flex-1 space-y-2">
         {menuItems.map((item) => {
-          const Icon = item.icon;
+          const Icon     = item.icon;
           const isActive = pathname === item.href;
           return (
             <Link
@@ -63,9 +63,7 @@ const Sidebar = () => {
         })}
       </nav>
       <div className="px-2 pt-6 border-t border-white/10">
-        <p className="text-[10px] text-slate-600 font-bold uppercase tracking-widest">
-          FinancIA v1.0
-        </p>
+        <p className="text-[10px] text-slate-600 font-bold uppercase tracking-widest">FinancIA v1.0</p>
       </div>
     </aside>
   );
