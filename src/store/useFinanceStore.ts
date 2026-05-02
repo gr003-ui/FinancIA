@@ -4,6 +4,8 @@ import { persist } from 'zustand/middleware';
 const generateId = () =>
   Math.random().toString(36).substring(2, 9) + Date.now().toString(36);
 
+export type AccentTheme = 'emerald' | 'blue' | 'purple' | 'rose' | 'amber' | 'cyan';
+
 export interface Card {
   id: string;
   bank: string;
@@ -18,28 +20,13 @@ export interface Card {
 }
 
 export type TransactionCategory =
-  | 'Alimentación'
-  | 'Transporte'
-  | 'Servicios'
-  | 'Salud'
-  | 'Entretenimiento'
-  | 'Indumentaria'
-  | 'Educación'
-  | 'Viajes'
-  | 'Hogar'
-  | 'Otros';
+  | 'Alimentación' | 'Transporte' | 'Servicios' | 'Salud'
+  | 'Entretenimiento' | 'Indumentaria' | 'Educación' | 'Viajes'
+  | 'Hogar' | 'Otros';
 
 export const CATEGORIES: TransactionCategory[] = [
-  'Alimentación',
-  'Transporte',
-  'Servicios',
-  'Salud',
-  'Entretenimiento',
-  'Indumentaria',
-  'Educación',
-  'Viajes',
-  'Hogar',
-  'Otros',
+  'Alimentación','Transporte','Servicios','Salud',
+  'Entretenimiento','Indumentaria','Educación','Viajes','Hogar','Otros',
 ];
 
 export interface Transaction {
@@ -62,18 +49,20 @@ interface FinanceState {
   transactions: Transaction[];
   exchangeRate: number;
   userName: string;
+  accentTheme: AccentTheme;
   addCard: (card: Omit<Card, 'id' | 'availableOnePayment' | 'availableInstallments'>) => void;
   removeCard: (id: string) => void;
   addTransaction: (tx: Omit<Transaction, 'id'>) => void;
   removeTransaction: (id: string) => void;
   setExchangeRate: (rate: number) => void;
   setUserName: (name: string) => void;
+  setAccentTheme: (theme: AccentTheme) => void;
   resetAll: () => void;
 }
 
 function monthsPassedSince(dateISO: string): number {
   const txDate = new Date(dateISO);
-  const now = new Date();
+  const now    = new Date();
   return Math.max(
     0,
     (now.getFullYear() - txDate.getFullYear()) * 12 +
@@ -81,16 +70,11 @@ function monthsPassedSince(dateISO: string): number {
   );
 }
 
-function effectiveCardDeduction(
-  amountInARS: number,
-  installments: number,
-  txDateISO: string
-): number {
+function effectiveCardDeduction(amountInARS: number, installments: number, txDateISO: string): number {
   if (installments <= 1) return amountInARS;
   const passed     = monthsPassedSince(txDateISO);
   const alreadyPaid = Math.min(passed, installments);
-  const remaining  = installments - alreadyPaid;
-  return (amountInARS * remaining) / installments;
+  return (amountInARS * (installments - alreadyPaid)) / installments;
 }
 
 function applyDeductionToCard(card: Card, deduction: number): Card {
@@ -98,14 +82,12 @@ function applyDeductionToCard(card: Card, deduction: number): Card {
   if (card.singleLimit) {
     return { ...card, availableOnePayment: Math.max(0, card.availableOnePayment - deduction) };
   }
-  const totalAvail = card.availableOnePayment + card.availableInstallments;
-  if (totalAvail <= 0) return card;
-  const ratioOne  = card.availableOnePayment   / totalAvail;
-  const ratioInst = card.availableInstallments / totalAvail;
+  const total = card.availableOnePayment + card.availableInstallments;
+  if (total <= 0) return card;
   return {
     ...card,
-    availableOnePayment:   Math.max(0, card.availableOnePayment   - deduction * ratioOne),
-    availableInstallments: Math.max(0, card.availableInstallments - deduction * ratioInst),
+    availableOnePayment:   Math.max(0, card.availableOnePayment   - deduction * (card.availableOnePayment / total)),
+    availableInstallments: Math.max(0, card.availableInstallments - deduction * (card.availableInstallments / total)),
   };
 }
 
@@ -114,87 +96,75 @@ function applyRestorationToCard(card: Card, deduction: number): Card {
   if (card.singleLimit) {
     return { ...card, availableOnePayment: Math.min(card.limitOnePayment, card.availableOnePayment + deduction) };
   }
-  const totalLimit = card.limitOnePayment + card.limitInstallments;
-  if (totalLimit <= 0) return card;
-  const ratioOne  = card.limitOnePayment   / totalLimit;
-  const ratioInst = card.limitInstallments / totalLimit;
+  const total = card.limitOnePayment + card.limitInstallments;
+  if (total <= 0) return card;
   return {
     ...card,
-    availableOnePayment:   Math.min(card.limitOnePayment,   card.availableOnePayment   + deduction * ratioOne),
-    availableInstallments: Math.min(card.limitInstallments, card.availableInstallments + deduction * ratioInst),
+    availableOnePayment:   Math.min(card.limitOnePayment,   card.availableOnePayment   + deduction * (card.limitOnePayment / total)),
+    availableInstallments: Math.min(card.limitInstallments, card.availableInstallments + deduction * (card.limitInstallments / total)),
   };
 }
 
 export const useFinanceStore = create<FinanceState>()(
   persist(
     (set) => ({
-      cards: [],
+      cards:        [],
       transactions: [],
       exchangeRate: 1000,
-      userName: 'Usuario FinancIA',
+      userName:     'Usuario FinancIA',
+      accentTheme:  'emerald',
 
-      setExchangeRate: (rate) => set({ exchangeRate: rate }),
-      setUserName:     (name) => set({ userName: name }),
+      setExchangeRate: (rate)  => set({ exchangeRate: rate }),
+      setUserName:     (name)  => set({ userName: name }),
+      setAccentTheme:  (theme) => set({ accentTheme: theme }),
 
-      addCard: (card) =>
-        set((state) => ({
-          cards: [
-            ...state.cards,
-            {
-              ...card,
-              id: generateId(),
-              availableOnePayment:   card.limitOnePayment,
-              availableInstallments: card.singleLimit ? 0 : card.limitInstallments,
-            },
-          ],
+      addCard: (card) => set((state) => ({
+        cards: [...state.cards, {
+          ...card,
+          id: generateId(),
+          availableOnePayment:   card.limitOnePayment,
+          availableInstallments: card.singleLimit ? 0 : card.limitInstallments,
+        }],
+      })),
+
+      removeCard: (id) => set((state) => ({
+        cards: state.cards.filter((c) => c.id !== id),
+      })),
+
+      addTransaction: (tx) => set((state) => {
+        const newTx = { ...tx, id: generateId() };
+        let updatedCards = [...state.cards];
+        if (tx.type === 'expense' && tx.cardId && tx.method === 'Crédito') {
+          const amountInARS = tx.currency === 'USD' ? tx.amount * state.exchangeRate : tx.amount;
+          const deduction   = effectiveCardDeduction(amountInARS, tx.installments || 1, tx.date);
+          updatedCards = state.cards.map((c) => c.id === tx.cardId ? applyDeductionToCard(c, deduction) : c);
+        }
+        return { transactions: [newTx, ...state.transactions], cards: updatedCards };
+      }),
+
+      removeTransaction: (id) => set((state) => {
+        const tx = state.transactions.find((t) => t.id === id);
+        if (!tx) return state;
+        let updatedCards = [...state.cards];
+        if (tx.type === 'expense' && tx.cardId && tx.method === 'Crédito') {
+          const amountInARS = tx.currency === 'USD' ? tx.amount * state.exchangeRate : tx.amount;
+          const deduction   = effectiveCardDeduction(amountInARS, tx.installments || 1, tx.date);
+          updatedCards = state.cards.map((c) => c.id === tx.cardId ? applyRestorationToCard(c, deduction) : c);
+        }
+        return {
+          transactions: state.transactions.filter((t) => t.id !== id),
+          cards: updatedCards,
+        };
+      }),
+
+      resetAll: () => set((state) => ({
+        transactions: [],
+        cards: state.cards.map((card) => ({
+          ...card,
+          availableOnePayment:   card.limitOnePayment,
+          availableInstallments: card.singleLimit ? 0 : card.limitInstallments,
         })),
-
-      removeCard: (id) =>
-        set((state) => ({ cards: state.cards.filter((c) => c.id !== id) })),
-
-      addTransaction: (tx) =>
-        set((state) => {
-          const newTx = { ...tx, id: generateId() };
-          let updatedCards = [...state.cards];
-          if (tx.type === 'expense' && tx.cardId && tx.method === 'Crédito') {
-            const amountInARS =
-              tx.currency === 'USD' ? tx.amount * state.exchangeRate : tx.amount;
-            const deduction = effectiveCardDeduction(amountInARS, tx.installments || 1, tx.date);
-            updatedCards = state.cards.map((card) =>
-              card.id === tx.cardId ? applyDeductionToCard(card, deduction) : card
-            );
-          }
-          return { transactions: [newTx, ...state.transactions], cards: updatedCards };
-        }),
-
-      removeTransaction: (id) =>
-        set((state) => {
-          const tx = state.transactions.find((t) => t.id === id);
-          if (!tx) return state;
-          let updatedCards = [...state.cards];
-          if (tx.type === 'expense' && tx.cardId && tx.method === 'Crédito') {
-            const amountInARS =
-              tx.currency === 'USD' ? tx.amount * state.exchangeRate : tx.amount;
-            const deduction = effectiveCardDeduction(amountInARS, tx.installments || 1, tx.date);
-            updatedCards = state.cards.map((card) =>
-              card.id === tx.cardId ? applyRestorationToCard(card, deduction) : card
-            );
-          }
-          return {
-            transactions: state.transactions.filter((t) => t.id !== id),
-            cards: updatedCards,
-          };
-        }),
-
-      resetAll: () =>
-        set((state) => ({
-          transactions: [],
-          cards: state.cards.map((card) => ({
-            ...card,
-            availableOnePayment:   card.limitOnePayment,
-            availableInstallments: card.singleLimit ? 0 : card.limitInstallments,
-          })),
-        })),
+      })),
     }),
     { name: 'financia-storage-v8' }
   )
@@ -208,10 +178,8 @@ export function getMonthlyAmount(t: Transaction): number {
 export function getDaysUntil(day: number): number {
   const now   = new Date();
   const today = now.getDate();
-  if (day >= today) {
-    const thisMonth = new Date(now.getFullYear(), now.getMonth(), day);
-    return Math.ceil((thisMonth.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-  }
-  const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, day);
-  return Math.ceil((nextMonth.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+  const target = day >= today
+    ? new Date(now.getFullYear(), now.getMonth(), day)
+    : new Date(now.getFullYear(), now.getMonth() + 1, day);
+  return Math.ceil((target.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
 }

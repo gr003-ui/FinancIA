@@ -1,16 +1,28 @@
 "use client";
 import { useState } from 'react';
-import { useFinanceStore } from '../../store/useFinanceStore';
-import { User, ShieldCheck, Bell, CreditCard, Save, AlertTriangle, DollarSign } from 'lucide-react';
+import { useFinanceStore, AccentTheme } from '../../store/useFinanceStore';
+import { User, ShieldCheck, Bell, CreditCard, Save, AlertTriangle, DollarSign, Palette } from 'lucide-react';
+
+const THEMES: { id: AccentTheme; label: string; color: string; bg: string }[] = [
+  { id: 'emerald', label: 'Esmeralda', color: '#10b981', bg: 'rgba(16,185,129,0.15)' },
+  { id: 'blue',    label: 'Azul',      color: '#3b82f6', bg: 'rgba(59,130,246,0.15)' },
+  { id: 'purple',  label: 'Violeta',   color: '#8b5cf6', bg: 'rgba(139,92,246,0.15)' },
+  { id: 'rose',    label: 'Rosa',      color: '#f43f5e', bg: 'rgba(244,63,94,0.15)'  },
+  { id: 'amber',   label: 'Ámbar',     color: '#f59e0b', bg: 'rgba(245,158,11,0.15)' },
+  { id: 'cyan',    label: 'Cyan',      color: '#06b6d4', bg: 'rgba(6,182,212,0.15)'  },
+];
 
 export default function ConfigPage() {
-  const { cards, transactions, userName, exchangeRate, setUserName, setExchangeRate, resetAll } = useFinanceStore();
+  const {
+    cards, transactions, userName, exchangeRate, accentTheme,
+    setUserName, setExchangeRate, setAccentTheme, resetAll,
+  } = useFinanceStore();
 
-  const [nameInput, setNameInput] = useState(userName);
-  const [rateInput, setRateInput] = useState(String(exchangeRate));
+  const [nameInput,    setNameInput]    = useState(userName);
+  const [rateInput,    setRateInput]    = useState(String(exchangeRate));
   const [confirmReset, setConfirmReset] = useState(false);
-  const [savedName, setSavedName] = useState(false);
-  const [savedRate, setSavedRate] = useState(false);
+  const [savedName,    setSavedName]    = useState(false);
+  const [savedRate,    setSavedRate]    = useState(false);
 
   const handleSaveName = () => {
     if (!nameInput.trim()) return;
@@ -44,17 +56,20 @@ export default function ConfigPage() {
         {/* PERFIL */}
         <div className="md:col-span-1 space-y-6">
           <div className="bg-slate-900 rounded-[3rem] p-8 border border-white/10 text-center">
-            <div className="w-24 h-24 bg-emerald-500/10 text-emerald-500 rounded-full flex items-center justify-center mx-auto mb-4">
+            <div className="w-24 h-24 rounded-full flex items-center justify-center mx-auto mb-4"
+              style={{ background: `rgba(var(--accent-muted))`, color: 'var(--accent-text)' }}>
               <User size={48} />
             </div>
             <h2 className="text-2xl font-black text-white">{userName}</h2>
             <p className="text-slate-500 font-medium text-sm mb-6">hola@financia.com</p>
-            <span className="px-4 py-1.5 bg-emerald-500/20 text-emerald-400 text-[10px] font-black uppercase rounded-full tracking-widest">
+            <span className="px-4 py-1.5 text-[10px] font-black uppercase rounded-full tracking-widest"
+              style={{ background: 'var(--accent-muted)', color: 'var(--accent-text)' }}>
               Plan Pro
             </span>
           </div>
 
-          <div className="bg-emerald-600 rounded-[2.5rem] p-6 text-white shadow-lg shadow-emerald-500/20">
+          <div className="rounded-[2.5rem] p-6 text-white shadow-lg"
+            style={{ background: 'var(--accent)', boxShadow: `0 10px 30px var(--accent-shadow)` }}>
             <p className="text-xs font-bold opacity-80 uppercase mb-2">Estadísticas rápidas</p>
             <div className="flex justify-between items-end">
               <div>
@@ -72,11 +87,55 @@ export default function ConfigPage() {
         {/* OPCIONES */}
         <div className="md:col-span-2 space-y-4">
 
-          {/* Nombre */}
+          {/* TEMA DE COLOR */}
+          <div className="bg-slate-900 rounded-[3rem] p-8 border border-white/10 space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="p-3 rounded-xl" style={{ background: 'var(--accent-muted)' }}>
+                <Palette size={20} style={{ color: 'var(--accent-text)' }} />
+              </div>
+              <div>
+                <p className="font-bold text-white">Color de Acento</p>
+                <p className="text-xs text-slate-500">Personalizá la paleta de colores de la app.</p>
+              </div>
+            </div>
+            <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
+              {THEMES.map((theme) => (
+                <button
+                  key={theme.id}
+                  onClick={() => setAccentTheme(theme.id)}
+                  title={theme.label}
+                  className={`relative flex flex-col items-center gap-2 p-3 rounded-2xl border transition-all focus:outline-none focus:ring-2 ${
+                    accentTheme === theme.id
+                      ? 'border-white/30 scale-105'
+                      : 'border-white/5 hover:border-white/15'
+                  }`}
+                  style={{
+                    background: accentTheme === theme.id ? theme.bg : 'rgba(255,255,255,0.03)',
+                    ...(accentTheme === theme.id ? { boxShadow: `0 0 0 2px ${theme.color}40` } : {}),
+                  }}
+                >
+                  <div
+                    className="w-8 h-8 rounded-full shadow-lg"
+                    style={{ background: theme.color, boxShadow: `0 4px 12px ${theme.color}50` }}
+                  />
+                  <span className="text-[9px] font-black uppercase tracking-wider"
+                    style={{ color: accentTheme === theme.id ? theme.color : '#64748b' }}>
+                    {theme.label}
+                  </span>
+                  {accentTheme === theme.id && (
+                    <div className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full"
+                      style={{ background: theme.color }} />
+                  )}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* NOMBRE */}
           <div className="bg-slate-900 rounded-[3rem] p-8 border border-white/10 space-y-4">
             <div className="flex items-center gap-3 mb-2">
-              <div className="p-3 bg-emerald-500/10 text-emerald-400 rounded-xl">
-                <User size={20} />
+              <div className="p-3 rounded-xl" style={{ background: 'var(--accent-muted)' }}>
+                <User size={20} style={{ color: 'var(--accent-text)' }} />
               </div>
               <div>
                 <p className="font-bold text-white">Nombre de Usuario</p>
@@ -86,24 +145,28 @@ export default function ConfigPage() {
             <div className="flex gap-3">
               <input
                 value={nameInput}
-                onChange={e => setNameInput(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && handleSaveName()}
-                className="flex-1 bg-white/5 border border-white/10 text-white p-3 rounded-2xl outline-none focus:border-emerald-500/50 transition-all text-sm font-bold placeholder:text-slate-600"
+                onChange={(e) => setNameInput(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleSaveName()}
+                className="flex-1 bg-white/5 border border-white/10 text-white p-3 rounded-2xl outline-none transition-all text-sm font-bold placeholder:text-slate-600 focus:border-white/30"
                 placeholder="Tu nombre"
               />
-              <button onClick={handleSaveName}
+              <button
+                onClick={handleSaveName}
                 className={`flex items-center gap-2 px-4 py-3 rounded-2xl font-black text-xs uppercase transition-all ${
-                  savedName
-                    ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
-                    : 'bg-emerald-500 text-white hover:bg-emerald-400'
-                }`}>
+                  savedName ? 'text-white border border-white/20' : 'text-white'
+                }`}
+                style={{
+                  background: savedName ? 'var(--accent-muted)' : 'var(--accent)',
+                  ...(savedName ? { borderColor: 'var(--accent-border)' } : {}),
+                }}
+              >
                 <Save size={14} />
                 {savedName ? '¡Guardado!' : 'Guardar'}
               </button>
             </div>
           </div>
 
-          {/* Cotización por defecto */}
+          {/* COTIZACIÓN */}
           <div className="bg-slate-900 rounded-[3rem] p-8 border border-white/10 space-y-4">
             <div className="flex items-center gap-3 mb-2">
               <div className="p-3 bg-amber-500/10 text-amber-400 rounded-xl">
@@ -111,7 +174,7 @@ export default function ConfigPage() {
               </div>
               <div>
                 <p className="font-bold text-white">Cotización USD/ARS</p>
-                <p className="text-xs text-slate-500">Valor por defecto para la pesificación de gastos en dólares.</p>
+                <p className="text-xs text-slate-500">Valor por defecto para la pesificación.</p>
               </div>
             </div>
             <div className="flex gap-3">
@@ -120,24 +183,26 @@ export default function ConfigPage() {
                 <input
                   type="number"
                   value={rateInput}
-                  onChange={e => setRateInput(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && handleSaveRate()}
+                  onChange={(e) => setRateInput(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleSaveRate()}
                   className="flex-1 bg-transparent text-white p-3 outline-none text-sm font-bold"
                 />
               </div>
-              <button onClick={handleSaveRate}
+              <button
+                onClick={handleSaveRate}
                 className={`flex items-center gap-2 px-4 py-3 rounded-2xl font-black text-xs uppercase transition-all ${
                   savedRate
                     ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
                     : 'bg-amber-500 text-white hover:bg-amber-400'
-                }`}>
+                }`}
+              >
                 <Save size={14} />
                 {savedRate ? '¡Guardado!' : 'Guardar'}
               </button>
             </div>
           </div>
 
-          {/* Otros botones */}
+          {/* OTROS BOTONES */}
           <div className="bg-slate-900 rounded-[3rem] p-8 border border-white/10 space-y-2">
             <button className="w-full flex items-center p-5 hover:bg-white/5 rounded-2xl transition-all group">
               <div className="flex items-center gap-4">
@@ -176,7 +241,7 @@ export default function ConfigPage() {
             </button>
           </div>
 
-          {/* Reset */}
+          {/* RESET */}
           <div className="bg-slate-900 rounded-[3rem] p-8 border border-rose-500/20 space-y-4">
             <div className="flex items-center gap-3">
               <div className="p-3 bg-rose-500/10 text-rose-400 rounded-xl">
@@ -185,16 +250,15 @@ export default function ConfigPage() {
               <div>
                 <p className="font-bold text-white">Zona de Peligro</p>
                 <p className="text-xs text-slate-500">
-                  El reset borra todos los movimientos y restaura los límites de las tarjetas.
-                  Las tarjetas en sí no se eliminan.
+                  Borra todos los movimientos y restaura los límites de tarjetas.
                 </p>
               </div>
             </div>
-
             {!confirmReset ? (
               <button
                 onClick={() => setConfirmReset(true)}
-                className="w-full p-4 bg-rose-500/10 text-rose-400 border border-rose-500/20 rounded-2xl font-black uppercase text-xs tracking-widest hover:bg-rose-500/20 transition-all">
+                className="w-full p-4 bg-rose-500/10 text-rose-400 border border-rose-500/20 rounded-2xl font-black uppercase text-xs tracking-widest hover:bg-rose-500/20 transition-all"
+              >
                 Resetear todos los datos
               </button>
             ) : (
@@ -203,12 +267,16 @@ export default function ConfigPage() {
                   ¿Estás seguro? Esta acción no se puede deshacer.
                 </p>
                 <div className="flex gap-3">
-                  <button onClick={() => setConfirmReset(false)}
-                    className="flex-1 p-3 bg-white/5 text-slate-400 rounded-xl font-black text-xs uppercase hover:bg-white/10 transition-all">
+                  <button
+                    onClick={() => setConfirmReset(false)}
+                    className="flex-1 p-3 bg-white/5 text-slate-400 rounded-xl font-black text-xs uppercase hover:bg-white/10 transition-all"
+                  >
                     Cancelar
                   </button>
-                  <button onClick={handleReset}
-                    className="flex-1 p-3 bg-rose-500 text-white rounded-xl font-black text-xs uppercase hover:bg-rose-400 transition-all">
+                  <button
+                    onClick={handleReset}
+                    className="flex-1 p-3 bg-rose-500 text-white rounded-xl font-black text-xs uppercase hover:bg-rose-400 transition-all"
+                  >
                     Sí, resetear
                   </button>
                 </div>
