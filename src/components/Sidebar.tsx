@@ -12,24 +12,28 @@ const Sidebar = () => {
   const pathname = usePathname();
   const { cards, budgets, transactions, exchangeRate } = useFinanceStore();
 
-  const now = new Date();
+  const now  = new Date();
+  const thisM = now.getMonth();
+  const thisY = now.getFullYear();
+  const prevM = thisM === 0 ? 11 : thisM - 1;
+  const prevY = thisM === 0 ? thisY - 1 : thisY;
 
+  // Alerta de límite bajo en tarjetas
   const hasLowLimit = cards.some((card) => {
     if (card.type === 'Débito') return false;
-    return card.limitOnePayment > 0 &&
-      (card.availableOnePayment / card.limitOnePayment) * 100 < 20;
+    return (
+      card.limitOnePayment > 0 &&
+      (card.availableOnePayment / card.limitOnePayment) * 100 < 20
+    );
   });
 
   const toARS = (amount: number, currency: 'ARS' | 'USD') =>
     currency === 'USD' ? amount * exchangeRate : amount;
 
+  // Gastos del mes actual para calcular alertas de presupuesto
   const periodExpenses = transactions.filter((t) => {
     const d = new Date(t.date);
-    return (
-      t.type === 'expense' &&
-      d.getMonth() === now.getMonth() &&
-      d.getFullYear() === now.getFullYear()
-    );
+    return t.type === 'expense' && d.getMonth() === thisM && d.getFullYear() === thisY;
   });
 
   const hasBudgetAlert = budgets.some((b) => {
@@ -39,8 +43,32 @@ const Sidebar = () => {
     return spent >= toARS(b.amount, b.currency) * 0.8;
   });
 
+  // Recordatorios de ingresos fijos pendientes
+  const fixedLast = transactions.filter((t) => {
+    const d = new Date(t.date);
+    return (
+      t.type === 'income' &&
+      t.incomeType === 'fixed' &&
+      d.getMonth() === prevM &&
+      d.getFullYear() === prevY
+    );
+  });
+
+  const thisMonthDescriptions = new Set(
+    transactions
+      .filter((t) => {
+        const d = new Date(t.date);
+        return t.type === 'income' && d.getMonth() === thisM && d.getFullYear() === thisY;
+      })
+      .map((t) => t.description.toLowerCase().trim())
+  );
+
+  const hasPendingFixed = fixedLast.some(
+    (t) => !thisMonthDescriptions.has(t.description.toLowerCase().trim())
+  );
+
   const menuItems = [
-    { name: 'Inicio',        href: '/',              icon: LayoutDashboard, alert: false },
+    { name: 'Inicio',        href: '/',              icon: LayoutDashboard, alert: hasPendingFixed },
     { name: 'Movimientos',   href: '/movimientos',   icon: ListOrdered,     alert: false },
     { name: 'Proyección',    href: '/proyeccion',    icon: TrendingUp,      alert: false },
     { name: 'Presupuestos',  href: '/presupuestos',  icon: Target,          alert: hasBudgetAlert },

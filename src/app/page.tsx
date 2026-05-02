@@ -12,9 +12,13 @@ import {
 } from 'lucide-react';
 import CategoryLineChart from '../components/CategoryLineChart';
 import MultiCurrencyBalance from '../components/MultiCurrencyBalance';
+import FixedIncomeReminder from '../components/FixedIncomeReminder';
+import BudgetPanel from '../components/BudgetPanel';
 
-const MONTHS       = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
-const MONTHS_SHORT = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+const MONTHS       = ['Enero','Febrero','Marzo','Abril','Mayo','Junio',
+                      'Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+const MONTHS_SHORT = ['Ene','Feb','Mar','Abr','May','Jun',
+                      'Jul','Ago','Sep','Oct','Nov','Dic'];
 
 const BarTooltip = ({
   active, payload, label,
@@ -118,7 +122,7 @@ export default function Dashboard() {
     };
   });
 
-  const COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#ef4444'];
+  const COLORS = ['#10b981','#3b82f6','#f59e0b','#ef4444'];
   const methodColor: Record<string, string> = {
     Efectivo: 'bg-emerald-500/10 text-emerald-400',
     Débito:   'bg-blue-500/10 text-blue-400',
@@ -143,22 +147,22 @@ export default function Dashboard() {
         </div>
         <div className="flex bg-slate-900 border border-white/10 p-1 rounded-2xl gap-1">
           <button onClick={() => setAllTime(false)}
-            className={`px-4 py-2 rounded-xl text-xs font-black uppercase transition-all focus:outline-none focus:ring-2 focus:ring-emerald-400 ${!allTime ? 'bg-emerald-500 text-white' : 'text-slate-500 hover:text-white'}`}>
+            className={`px-4 py-2 rounded-xl text-xs font-black uppercase transition-all ${!allTime ? 'bg-emerald-500 text-white' : 'text-slate-500 hover:text-white'}`}>
             Mensual
           </button>
           <button onClick={() => setAllTime(true)}
-            className={`px-4 py-2 rounded-xl text-xs font-black uppercase transition-all focus:outline-none focus:ring-2 focus:ring-emerald-400 ${allTime ? 'bg-emerald-500 text-white' : 'text-slate-500 hover:text-white'}`}>
+            className={`px-4 py-2 rounded-xl text-xs font-black uppercase transition-all ${allTime ? 'bg-emerald-500 text-white' : 'text-slate-500 hover:text-white'}`}>
             Todo
           </button>
         </div>
         {!allTime && (
           <>
             <select value={filterMonth} onChange={(e) => setFilterMonth(Number(e.target.value))}
-              className="bg-slate-900 border border-white/10 text-white text-xs font-bold px-4 py-2.5 rounded-2xl outline-none focus:border-emerald-500/50">
+              className="bg-slate-900 border border-white/10 text-white text-xs font-bold px-4 py-2.5 rounded-2xl outline-none">
               {MONTHS.map((m, i) => <option key={m} value={i} className="bg-slate-900">{m}</option>)}
             </select>
             <select value={filterYear} onChange={(e) => setFilterYear(Number(e.target.value))}
-              className="bg-slate-900 border border-white/10 text-white text-xs font-bold px-4 py-2.5 rounded-2xl outline-none focus:border-emerald-500/50">
+              className="bg-slate-900 border border-white/10 text-white text-xs font-bold px-4 py-2.5 rounded-2xl outline-none">
               {availableYears.map((y) => <option key={y} value={y} className="bg-slate-900">{y}</option>)}
             </select>
           </>
@@ -168,10 +172,17 @@ export default function Dashboard() {
         </span>
       </div>
 
+      {/* RECORDATORIOS Y PRESUPUESTOS — solo si hay mes seleccionado */}
+      {!allTime && (
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+          <FixedIncomeReminder />
+          <BudgetPanel month={filterMonth} year={filterYear} />
+        </div>
+      )}
+
       {/* KPI CARDS */}
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-6">
 
-        {/* Balance — ahora muestra ARS + equivalente USD */}
         <div className="bg-slate-900 p-7 rounded-[2.5rem] border border-white/10 flex flex-col gap-3">
           <div className="flex items-center justify-between">
             <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Balance</p>
@@ -192,7 +203,9 @@ export default function Dashboard() {
         <div className="bg-slate-900 p-7 rounded-[2.5rem] border border-white/10 flex flex-col gap-4">
           <div className="flex items-center justify-between">
             <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Ingresos</p>
-            <div className="p-2 bg-blue-500/10 rounded-xl"><TrendingUp size={18} className="text-blue-400" /></div>
+            <div className="p-2 bg-blue-500/10 rounded-xl">
+              <TrendingUp size={18} className="text-blue-400" />
+            </div>
           </div>
           <p className="text-3xl font-black tracking-tight text-white">{formatM(totalIngresos)}</p>
           <p className="text-[10px] text-slate-600">
@@ -203,7 +216,9 @@ export default function Dashboard() {
         <div className="bg-slate-900 p-7 rounded-[2.5rem] border border-white/10 flex flex-col gap-4">
           <div className="flex items-center justify-between">
             <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Gastos</p>
-            <div className="p-2 bg-rose-500/10 rounded-xl"><TrendingDown size={18} className="text-rose-400" /></div>
+            <div className="p-2 bg-rose-500/10 rounded-xl">
+              <TrendingDown size={18} className="text-rose-400" />
+            </div>
           </div>
           <p className="text-3xl font-black tracking-tight text-white">{formatM(totalGastos)}</p>
           <p className="text-[10px] text-slate-600">
@@ -244,6 +259,7 @@ export default function Dashboard() {
 
       {/* TORTA + MOVIMIENTOS */}
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-8">
+
         <div className="xl:col-span-5 bg-slate-900 p-8 rounded-[3rem] border border-white/10">
           <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-6">
             Gastos por Método de Pago
