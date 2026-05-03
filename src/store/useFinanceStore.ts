@@ -19,7 +19,7 @@ export const CATEGORIES: TransactionCategory[] = [
 export interface Budget {
   id: string;
   category: TransactionCategory;
-  amount: number;        // límite mensual en ARS
+  amount: number;
   currency: 'ARS' | 'USD';
 }
 
@@ -58,6 +58,7 @@ interface FinanceState {
   exchangeRate: number;
   userName: string;
   accentTheme: AccentTheme;
+  onboardingComplete: boolean;
   addCard: (card: Omit<Card, 'id' | 'availableOnePayment' | 'availableInstallments'>) => void;
   removeCard: (id: string) => void;
   addTransaction: (tx: Omit<Transaction, 'id'>) => void;
@@ -67,6 +68,7 @@ interface FinanceState {
   setExchangeRate: (rate: number) => void;
   setUserName: (name: string) => void;
   setAccentTheme: (theme: AccentTheme) => void;
+  setOnboardingComplete: () => void;
   resetAll: () => void;
 }
 
@@ -122,16 +124,18 @@ function applyRestorationToCard(card: Card, deduction: number): Card {
 export const useFinanceStore = create<FinanceState>()(
   persist(
     (set) => ({
-      cards:        [],
-      transactions: [],
-      budgets:      [],
-      exchangeRate: 1000,
-      userName:     'Usuario FinancIA',
-      accentTheme:  'emerald',
+      cards:              [],
+      transactions:       [],
+      budgets:            [],
+      exchangeRate:       1000,
+      userName:           'Usuario FinancIA',
+      accentTheme:        'emerald',
+      onboardingComplete: false,
 
-      setExchangeRate: (rate)  => set({ exchangeRate: rate }),
-      setUserName:     (name)  => set({ userName: name }),
-      setAccentTheme:  (theme) => set({ accentTheme: theme }),
+      setExchangeRate:       (rate)  => set({ exchangeRate: rate }),
+      setUserName:           (name)  => set({ userName: name }),
+      setAccentTheme:        (theme) => set({ accentTheme: theme }),
+      setOnboardingComplete: ()      => set({ onboardingComplete: true }),
 
       setBudget: (category, amount, currency) =>
         set((state) => {
