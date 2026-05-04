@@ -45,7 +45,7 @@ export interface Transaction {
   type: 'income' | 'expense';
   incomeType?: 'fixed' | 'variable';
   category?: TransactionCategory;
-  date: string;
+  date: string;       // mes en que se realizó el consumo
   installments: number;
   currentInstallment: number;
   cardId?: string;
@@ -219,9 +219,39 @@ export const useFinanceStore = create<FinanceState>()(
   )
 );
 
+// Monto mensual de la cuota (para cuotas divide por total, para resto es el monto completo)
 export function getMonthlyAmount(t: Transaction): number {
   if (t.type === 'expense' && t.installments > 1) return t.amount / t.installments;
   return t.amount;
+}
+
+/**
+ * Devuelve la fecha en que un gasto de crédito REALMENTE impacta el balance.
+ * Los consumos de crédito se pagan el mes SIGUIENTE al de la transacción.
+ * Efectivo y débito impactan en el mismo mes.
+ */
+export function getPaymentDate(t: Transaction): Date {
+  const txDate = new Date(t.date);
+  if (t.type === 'expense' && t.method === 'Crédito') {
+    return new Date(txDate.getFullYear(), txDate.getMonth() + 1, 1);
+  }
+  return txDate;
+}
+
+/**
+ * Filtra transacciones que impactan en un mes/año dado.
+ * Para crédito: impacta en mes+1 del registro.
+ * Para todo lo demás: impacta en el mes del registro.
+ */
+export function filterByImpactMonth(
+  transactions: Transaction[],
+  month: number,
+  year: number
+): Transaction[] {
+  return transactions.filter((t) => {
+    const payDate = getPaymentDate(t);
+    return payDate.getMonth() === month && payDate.getFullYear() === year;
+  });
 }
 
 export function getDaysUntil(day: number): number {

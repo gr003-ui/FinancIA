@@ -1,5 +1,5 @@
 "use client";
-import { useFinanceStore, getMonthlyAmount } from '../store/useFinanceStore';
+import { useFinanceStore, getMonthlyAmount, filterByImpactMonth } from '../store/useFinanceStore';
 import { DollarSign, TrendingUp, TrendingDown, ArrowLeftRight } from 'lucide-react';
 
 interface MultiCurrencyBalanceProps {
@@ -16,15 +16,12 @@ export default function MultiCurrencyBalance({
   const { transactions, exchangeRate } = useFinanceStore();
 
   const now = new Date();
-  const m = filterMonth ?? now.getMonth();
-  const y = filterYear  ?? now.getFullYear();
+  const m   = filterMonth ?? now.getMonth();
+  const y   = filterYear  ?? now.getFullYear();
 
   const periodTx = allTime
     ? transactions
-    : transactions.filter((t) => {
-        const d = new Date(t.date);
-        return d.getMonth() === m && d.getFullYear() === y;
-      });
+    : filterByImpactMonth(transactions, m, y);
 
   const formatARS = (v: number) =>
     new Intl.NumberFormat('es-AR', {
@@ -36,7 +33,6 @@ export default function MultiCurrencyBalance({
       style: 'currency', currency: 'USD', maximumFractionDigits: 2,
     }).format(v);
 
-  // ── ARS nativo ───────────────────────────────────────────────────────────
   const incomesARS = periodTx
     .filter((t) => t.type === 'income' && t.currency === 'ARS')
     .reduce((acc, t) => acc + t.amount, 0);
@@ -47,7 +43,6 @@ export default function MultiCurrencyBalance({
 
   const balanceARS = incomesARS - expensesARS;
 
-  // ── USD nativo ───────────────────────────────────────────────────────────
   const incomesUSD = periodTx
     .filter((t) => t.type === 'income' && t.currency === 'USD')
     .reduce((acc, t) => acc + t.amount, 0);
@@ -58,7 +53,6 @@ export default function MultiCurrencyBalance({
 
   const balanceUSD = incomesUSD - expensesUSD;
 
-  // ── Total pesificado (para la línea de equivalencia) ─────────────────────
   const totalARS = balanceARS + balanceUSD * exchangeRate;
   const totalUSD = balanceUSD + balanceARS / exchangeRate;
 
@@ -76,21 +70,14 @@ export default function MultiCurrencyBalance({
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
 
-        {/* ARS */}
         <div className="bg-white/5 rounded-[2rem] p-6 space-y-4 border border-white/5">
           <div className="flex items-center justify-between">
-            <p className="text-xs font-black text-slate-400 uppercase tracking-widest">
-              Pesos ARS
-            </p>
-            <span className="text-[10px] font-black bg-emerald-500/10 text-emerald-400 px-2 py-0.5 rounded-full">
-              ARS
-            </span>
+            <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Pesos ARS</p>
+            <span className="text-[10px] font-black bg-emerald-500/10 text-emerald-400 px-2 py-0.5 rounded-full">ARS</span>
           </div>
-
           <p className={`text-3xl font-black tracking-tight ${balanceARS >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
             {formatARS(balanceARS)}
           </p>
-
           <div className="space-y-2">
             <div className="flex items-center justify-between text-xs">
               <div className="flex items-center gap-2 text-slate-500">
@@ -113,21 +100,14 @@ export default function MultiCurrencyBalance({
           </div>
         </div>
 
-        {/* USD */}
         <div className="bg-white/5 rounded-[2rem] p-6 space-y-4 border border-white/5">
           <div className="flex items-center justify-between">
-            <p className="text-xs font-black text-slate-400 uppercase tracking-widest">
-              Dólares USD
-            </p>
-            <span className="text-[10px] font-black bg-blue-500/10 text-blue-400 px-2 py-0.5 rounded-full">
-              USD
-            </span>
+            <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Dólares USD</p>
+            <span className="text-[10px] font-black bg-blue-500/10 text-blue-400 px-2 py-0.5 rounded-full">USD</span>
           </div>
-
           <p className={`text-3xl font-black tracking-tight ${balanceUSD >= 0 ? 'text-blue-400' : 'text-rose-400'}`}>
             {formatUSD(balanceUSD)}
           </p>
-
           <div className="space-y-2">
             <div className="flex items-center justify-between text-xs">
               <div className="flex items-center gap-2 text-slate-500">
@@ -152,10 +132,9 @@ export default function MultiCurrencyBalance({
 
       </div>
 
-      {/* Totales unificados */}
       <div className="bg-white/5 rounded-[2rem] p-5 border border-white/5">
         <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-4">
-          Patrimonio Total del Período (todo convertido)
+          Patrimonio Total del Período
         </p>
         <div className="grid grid-cols-2 gap-4">
           <div className="text-center">

@@ -1,6 +1,9 @@
 "use client";
 import { useState } from 'react';
-import { useFinanceStore, getMonthlyAmount } from '../store/useFinanceStore';
+import {
+  useFinanceStore, getMonthlyAmount,
+  filterByImpactMonth, getPaymentDate,
+} from '../store/useFinanceStore';
 import { getDolarBlue } from '../lib/api';
 import {
   PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend,
@@ -74,18 +77,19 @@ export default function Dashboard() {
   const toARS = (amount: number, currency: 'ARS' | 'USD') =>
     currency === 'USD' ? amount * exchangeRate : amount;
 
-  const formatDate = (iso: string) => {
-    const d = new Date(iso);
+  const formatDate = (t: { date: string; method: string; type: string }) => {
+    const d = getPaymentDate(t as Parameters<typeof getPaymentDate>[0]);
     return `${d.getDate()} ${MONTHS_SHORT[d.getMonth()]}`;
   };
 
+  // Transacciones que IMPACTAN en el período seleccionado
+  // (crédito → mes siguiente, resto → mismo mes)
   const periodTx = allTime
     ? transactions
-    : transactions.filter((t) => {
-        const d = new Date(t.date);
-        return d.getMonth() === filterMonth && d.getFullYear() === filterYear;
-      });
+    : filterByImpactMonth(transactions, filterMonth, filterYear);
 
+  // Para mostrar en el listado, mostramos las del período de impacto
+  // pero con la etiqueta "Consumo: [mes original]" si es crédito
   const totalIngresos = periodTx
     .filter((t) => t.type === 'income')
     .reduce((acc, t) => acc + toARS(t.amount, t.currency), 0);
@@ -107,16 +111,14 @@ export default function Dashboard() {
       return acc;
     }, []);
 
+  // BarChart: últimos 6 meses usando impactMonth
   const monthlyData = Array.from({ length: 6 }, (_, i) => {
     const d = new Date();
     d.setDate(1);
     d.setMonth(d.getMonth() - (5 - i));
     const m = d.getMonth();
     const y = d.getFullYear();
-    const mTx = transactions.filter((t) => {
-      const td = new Date(t.date);
-      return td.getMonth() === m && td.getFullYear() === y;
-    });
+    const mTx = filterByImpactMonth(transactions, m, y);
     return {
       name: MONTHS_SHORT[m],
       Ingresos: mTx.filter((t) => t.type === 'income')
@@ -149,7 +151,7 @@ export default function Dashboard() {
           <div className="flex flex-wrap items-center gap-3">
             <div className="flex items-center gap-2 text-slate-500">
               <CalendarDays size={16} />
-              <span className="text-xs font-bold uppercase tracking-widest">Período</span>
+              <span className="text-xs font-bold uppercase tracking-widest">Período de pago</span>
             </div>
             <div className="flex bg-slate-900 border border-white/10 p-1 rounded-2xl gap-1">
               <button onClick={() => setAllTime(false)}
@@ -173,9 +175,16 @@ export default function Dashboard() {
                 </select>
               </>
             )}
-            <span className="text-[10px] text-slate-600">
-              {periodTx.length} movimientos{!allTime && ` · ${MONTHS[filterMonth]} ${filterYear}`}
-            </span>
+            <div className="flex flex-col">
+              <span className="text-[10px] text-slate-600">
+                {periodTx.length} movimientos{!allTime && ` que impactan en ${MONTHS[filterMonth]} ${filterYear}`}
+              </span>
+              {!allTime && (
+                <span className="text-[10px] text-purple-400/70">
+                  Crédito de {MONTHS[filterMonth === 0 ? 11 : filterMonth - 1]} se paga este mes
+                </span>
+              )}
+            </div>
           </div>
         </FadeIn>
 
@@ -189,7 +198,7 @@ export default function Dashboard() {
           </FadeIn>
         )}
 
-        {/* KPI CARDS — stagger */}
+        {/* KPI CARDS */}
         <StaggerList className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-6">
           {[
             {
@@ -207,7 +216,7 @@ export default function Dashboard() {
                   <span>≈ {formatUSD(balanceUSD)}</span>
                 </div>
               ),
-              hint: 'cuotas = valor mensual',
+              hint: 'crédito impacta el mes siguiente',
               icon: <Wallet size={18} className="text-emerald-400" />,
               iconBg: 'bg-emerald-500/10',
             },
@@ -271,12 +280,8 @@ export default function Dashboard() {
             <StaggerItem key={kpi.label}>
               <div className="bg-slate-900 p-7 rounded-[2.5rem] border border-white/10 flex flex-col gap-3 h-full">
                 <div className="flex items-center justify-between">
-                  <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
-                    {kpi.label}
-                  </p>
-                  <div className={kpi.iconBg ? `p-2 ${kpi.iconBg} rounded-xl` : ''}>
-                    {kpi.icon}
-                  </div>
+                  <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{kpi.label}</p>
+                  <div className={kpi.iconBg ? `p-2 ${kpi.iconBg} rounded-xl` : ''}>{kpi.icon}</div>
                 </div>
                 {kpi.node}
                 {kpi.sub}
@@ -304,7 +309,7 @@ export default function Dashboard() {
               </p>
               {chartData.length === 0 ? (
                 <div className="h-[260px] flex items-center justify-center text-slate-600 italic text-sm">
-                  Sin gastos en este período
+                  Sin gastos que impacten en este período
                 </div>
               ) : (
                 <ResponsiveContainer width="100%" height={260}>
@@ -329,80 +334,90 @@ export default function Dashboard() {
           <FadeIn delay={0.3} className="xl:col-span-7">
             <div className="bg-slate-900 p-8 rounded-[3rem] border border-white/10 h-full">
               <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-6">
-                Últimos Movimientos
+                Movimientos que impactan este período
               </p>
               {periodTx.length === 0 ? (
                 <div className="h-[260px] flex items-center justify-center text-slate-600 italic text-sm">
                   Sin movimientos en este período
                 </div>
               ) : (
-                <StaggerList
-                  className="space-y-3 max-h-[300px] overflow-y-auto pr-2"
-                  staggerDelay={0.04}
-                >
-                  {periodTx.slice(0, 20).map((t) => (
-                    <StaggerItem key={t.id}>
-                      <div className="flex items-center justify-between p-4 bg-white/5 rounded-2xl hover:bg-white/10 transition-all group">
-                        <div className="flex items-center gap-4">
-                          <div className={`p-2 rounded-xl ${t.type === 'income' ? 'bg-emerald-500/10' : 'bg-rose-500/10'}`}>
-                            {t.type === 'income'
-                              ? <ArrowUpCircle   size={20} className="text-emerald-400" />
-                              : <ArrowDownCircle size={20} className="text-rose-400"    />}
-                          </div>
-                          <div>
-                            <p className="font-bold text-white text-sm leading-tight">{t.description}</p>
-                            <div className="flex items-center gap-2 mt-1 flex-wrap">
-                              <span className="text-[10px] text-slate-500">{formatDate(t.date)}</span>
-                              {t.type === 'expense' && (
-                                <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${methodColor[t.method] ?? 'bg-white/10 text-slate-400'}`}>
-                                  {t.method}
-                                </span>
-                              )}
-                              {t.category && (
-                                <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-white/5 text-slate-500">
-                                  {t.category}
-                                </span>
-                              )}
-                              {t.type === 'income' && t.incomeType && (
-                                <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${t.incomeType === 'fixed' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-blue-500/10 text-blue-400'}`}>
-                                  {t.incomeType === 'fixed' ? 'Fijo' : 'Variable'}
-                                </span>
-                              )}
-                              {t.installments > 1 && (
-                                <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-purple-500/10 text-purple-400">
-                                  cuota {t.currentInstallment}/{t.installments}
-                                </span>
-                              )}
+                <StaggerList className="space-y-3 max-h-[300px] overflow-y-auto pr-2" staggerDelay={0.04}>
+                  {periodTx.slice(0, 20).map((t) => {
+                    const txOriginalDate = new Date(t.date);
+                    const isNextMonth = t.type === 'expense' && t.method === 'Crédito';
+                    return (
+                      <StaggerItem key={t.id}>
+                        <div className="flex items-center justify-between p-4 bg-white/5 rounded-2xl hover:bg-white/10 transition-all group">
+                          <div className="flex items-center gap-4">
+                            <div className={`p-2 rounded-xl ${t.type === 'income' ? 'bg-emerald-500/10' : 'bg-rose-500/10'}`}>
+                              {t.type === 'income'
+                                ? <ArrowUpCircle   size={20} className="text-emerald-400" />
+                                : <ArrowDownCircle size={20} className="text-rose-400"    />}
+                            </div>
+                            <div>
+                              <p className="font-bold text-white text-sm leading-tight">{t.description}</p>
+                              <div className="flex items-center gap-2 mt-1 flex-wrap">
+                                {isNextMonth && (
+                                  <span className="text-[10px] text-purple-400/70">
+                                    Consumo: {txOriginalDate.getDate()} {MONTHS_SHORT[txOriginalDate.getMonth()]}
+                                  </span>
+                                )}
+                                {!isNextMonth && (
+                                  <span className="text-[10px] text-slate-500">
+                                    {formatDate(t)}
+                                  </span>
+                                )}
+                                {t.type === 'expense' && (
+                                  <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${methodColor[t.method] ?? 'bg-white/10 text-slate-400'}`}>
+                                    {t.method}
+                                  </span>
+                                )}
+                                {t.category && (
+                                  <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-white/5 text-slate-500">
+                                    {t.category}
+                                  </span>
+                                )}
+                                {t.type === 'income' && t.incomeType && (
+                                  <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${t.incomeType === 'fixed' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-blue-500/10 text-blue-400'}`}>
+                                    {t.incomeType === 'fixed' ? 'Fijo' : 'Variable'}
+                                  </span>
+                                )}
+                                {t.installments > 1 && (
+                                  <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-purple-500/10 text-purple-400">
+                                    cuota {t.currentInstallment}/{t.installments}
+                                  </span>
+                                )}
+                              </div>
                             </div>
                           </div>
-                        </div>
-                        <div className="flex items-center gap-3">
-                          <div className="text-right">
-                            <p className={`font-black text-sm ${t.type === 'income' ? 'text-emerald-400' : 'text-rose-400'}`}>
-                              {t.type === 'income' ? '+' : '-'}
-                              {t.currency === 'USD'
-                                ? `U$S ${getMonthlyAmount(t).toLocaleString('es-AR')}`
-                                : formatM(getMonthlyAmount(t))}
-                            </p>
-                            {t.installments > 1 && (
-                              <p className="text-[10px] text-slate-600 mt-0.5">
-                                total: {t.currency === 'USD' ? `U$S ${t.amount}` : formatM(t.amount)}
+                          <div className="flex items-center gap-3">
+                            <div className="text-right">
+                              <p className={`font-black text-sm ${t.type === 'income' ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                {t.type === 'income' ? '+' : '-'}
+                                {t.currency === 'USD'
+                                  ? `U$S ${getMonthlyAmount(t).toLocaleString('es-AR')}`
+                                  : formatM(getMonthlyAmount(t))}
                               </p>
-                            )}
-                            {t.currency === 'USD' && t.installments <= 1 && (
-                              <p className="text-[10px] text-slate-600 mt-0.5">
-                                ≈ {formatM(t.amount * exchangeRate)}
-                              </p>
-                            )}
+                              {t.installments > 1 && (
+                                <p className="text-[10px] text-slate-600 mt-0.5">
+                                  total: {t.currency === 'USD' ? `U$S ${t.amount}` : formatM(t.amount)}
+                                </p>
+                              )}
+                              {t.currency === 'USD' && t.installments <= 1 && (
+                                <p className="text-[10px] text-slate-600 mt-0.5">
+                                  ≈ {formatM(t.amount * exchangeRate)}
+                                </p>
+                              )}
+                            </div>
+                            <button onClick={() => removeTransaction(t.id)}
+                              className="opacity-0 group-hover:opacity-100 transition-opacity p-2 rounded-xl hover:bg-rose-500/20 text-slate-600 hover:text-rose-400">
+                              <Trash2 size={15} />
+                            </button>
                           </div>
-                          <button onClick={() => removeTransaction(t.id)}
-                            className="opacity-0 group-hover:opacity-100 transition-opacity p-2 rounded-xl hover:bg-rose-500/20 text-slate-600 hover:text-rose-400">
-                            <Trash2 size={15} />
-                          </button>
                         </div>
-                      </div>
-                    </StaggerItem>
-                  ))}
+                      </StaggerItem>
+                    );
+                  })}
                 </StaggerList>
               )}
             </div>
@@ -413,7 +428,7 @@ export default function Dashboard() {
         <FadeIn delay={0.35}>
           <div className="bg-slate-900 p-8 rounded-[3rem] border border-white/10">
             <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-6">
-              Evolución Mensual — Últimos 6 Meses
+              Evolución Mensual — Últimos 6 Meses (por mes de pago)
             </p>
             <ResponsiveContainer width="100%" height={280}>
               <BarChart data={monthlyData} barGap={4} barCategoryGap="30%">
