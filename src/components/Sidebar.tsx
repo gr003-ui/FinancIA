@@ -9,6 +9,7 @@ import {
 import { useFinanceStore, getMonthlyAmount } from '../store/useFinanceStore';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useState, useEffect } from 'react';
+import UserMenu from './UserMenu';
 
 const Sidebar = () => {
   const pathname = usePathname();
@@ -16,7 +17,6 @@ const Sidebar = () => {
 
   const [collapsed, setCollapsed] = useState(false);
 
-  // Persistir estado de colapso en localStorage
   useEffect(() => {
     const saved = localStorage.getItem('sidebar-collapsed');
     if (saved !== null) setCollapsed(saved === 'true');
@@ -101,27 +101,21 @@ const Sidebar = () => {
       className="bg-slate-900 h-screen sticky top-0 flex flex-col text-white border-r border-white/5 overflow-hidden flex-shrink-0"
     >
       {/* Logo + toggle */}
-      <div className={`flex items-center h-20 px-4 flex-shrink-0 ${collapsed ? 'justify-center' : 'justify-between px-6'}`}>
+      <div className={`flex items-center h-20 flex-shrink-0 ${collapsed ? 'justify-center px-3' : 'justify-between px-6'}`}>
         <AnimatePresence mode="wait">
           {!collapsed ? (
-            <motion.div
-              key="full-logo"
-              initial={{ opacity: 0, x: -10 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -10 }}
-              transition={{ duration: 0.2 }}
+            <motion.div key="full"
+              initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -10 }} transition={{ duration: 0.2 }}
               className="flex items-center gap-3"
             >
               <Wallet size={24} className="text-emerald-500 flex-shrink-0" />
               <span className="text-xl font-black whitespace-nowrap">FinancIA</span>
             </motion.div>
           ) : (
-            <motion.div
-              key="icon-logo"
-              initial={{ opacity: 0, scale: 0.8 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.8 }}
-              transition={{ duration: 0.2 }}
+            <motion.div key="icon"
+              initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.8 }} transition={{ duration: 0.2 }}
             >
               <Wallet size={24} className="text-emerald-500" />
             </motion.div>
@@ -129,11 +123,8 @@ const Sidebar = () => {
         </AnimatePresence>
 
         {!collapsed && (
-          <button
-            onClick={toggleCollapse}
-            className="p-1.5 rounded-xl hover:bg-white/10 text-slate-500 hover:text-white transition-all flex-shrink-0"
-            title="Colapsar sidebar"
-          >
+          <button onClick={toggleCollapse}
+            className="p-1.5 rounded-xl hover:bg-white/10 text-slate-500 hover:text-white transition-all flex-shrink-0">
             <ChevronLeft size={16} />
           </button>
         )}
@@ -146,35 +137,24 @@ const Sidebar = () => {
           const isActive = pathname === item.href;
 
           return (
-            <Link
-              key={item.name}
-              href={item.href}
+            <Link key={item.name} href={item.href}
               title={collapsed ? item.name : undefined}
               className={`flex items-center rounded-2xl font-bold transition-all relative group ${
                 collapsed ? 'justify-center p-3' : 'gap-3 p-3.5'
-              } ${
-                isActive
-                  ? 'bg-emerald-500 text-white'
-                  : 'text-slate-400 hover:bg-slate-800 hover:text-white'
-              }`}
+              } ${isActive ? 'bg-emerald-500 text-white' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}
             >
               <div className="relative flex-shrink-0">
                 <Icon size={20} />
-                {/* Badge de alerta en modo compacto */}
                 {item.alert && !isActive && collapsed && (
                   <span className="absolute -top-1 -right-1 w-2 h-2 bg-amber-400 rounded-full" />
                 )}
               </div>
 
-              {/* Label animado */}
               <AnimatePresence mode="wait">
                 {!collapsed && (
-                  <motion.span
-                    key="label"
-                    initial={{ opacity: 0, width: 0 }}
-                    animate={{ opacity: 1, width: 'auto' }}
-                    exit={{ opacity: 0, width: 0 }}
-                    transition={{ duration: 0.2 }}
+                  <motion.span key="label"
+                    initial={{ opacity: 0, width: 0 }} animate={{ opacity: 1, width: 'auto' }}
+                    exit={{ opacity: 0, width: 0 }} transition={{ duration: 0.2 }}
                     className="text-sm whitespace-nowrap overflow-hidden"
                   >
                     {item.name}
@@ -182,24 +162,17 @@ const Sidebar = () => {
                 )}
               </AnimatePresence>
 
-              {/* Badge de alerta en modo expandido */}
               {item.alert && !isActive && !collapsed && (
-                <motion.span
-                  initial={{ opacity: 0, scale: 0.8 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  className="ml-auto flex-shrink-0"
-                >
+                <motion.span initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }}
+                  className="ml-auto flex-shrink-0">
                   <AlertTriangle size={12} className="text-amber-400" />
                 </motion.span>
               )}
 
-              {/* Tooltip en modo compacto */}
               {collapsed && (
                 <div className="absolute left-full ml-3 px-3 py-1.5 bg-slate-800 border border-white/10 text-white text-xs font-bold rounded-xl whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-50 shadow-xl">
                   {item.name}
-                  {item.alert && (
-                    <span className="ml-2 text-amber-400">●</span>
-                  )}
+                  {item.alert && <span className="ml-2 text-amber-400">●</span>}
                 </div>
               )}
             </Link>
@@ -207,18 +180,19 @@ const Sidebar = () => {
         })}
       </nav>
 
-      {/* Footer */}
-      <div className={`border-t border-white/10 flex-shrink-0 ${collapsed ? 'py-4 flex justify-center' : 'p-4'}`}>
+      {/* Footer con UserMenu */}
+      <div className={`border-t border-white/10 flex-shrink-0 ${collapsed ? 'p-2' : 'p-3'} space-y-1`}>
+        <UserMenu collapsed={collapsed} />
+
         {collapsed ? (
-          <button
-            onClick={toggleCollapse}
-            className="p-2 rounded-xl hover:bg-white/10 text-slate-500 hover:text-white transition-all"
-            title="Expandir sidebar"
-          >
-            <ChevronRight size={16} />
-          </button>
+          <div className="flex justify-center pt-1">
+            <button onClick={toggleCollapse}
+              className="p-2 rounded-xl hover:bg-white/10 text-slate-500 hover:text-white transition-all">
+              <ChevronRight size={16} />
+            </button>
+          </div>
         ) : (
-          <p className="text-[10px] text-slate-600 font-bold uppercase tracking-widest">
+          <p className="text-[10px] text-slate-600 font-bold uppercase tracking-widest px-3 pb-1">
             FinancIA v1.0
           </p>
         )}

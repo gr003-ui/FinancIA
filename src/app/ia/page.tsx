@@ -10,7 +10,6 @@ type ChatMessage = {
   text: string;
 };
 
-// Renderiza **negrita** y saltos de línea
 function renderMarkdown(text: string) {
   return text.split('\n').map((line, i) => {
     const parts = line.split(/\*\*(.*?)\*\*/g);
@@ -42,7 +41,7 @@ export default function IAPage() {
   const [input,    setInput]    = useState('');
   const [loading,  setLoading]  = useState(false);
   const [apiError, setApiError] = useState(false);
-  const bottomRef  = useRef<HTMLDivElement>(null);
+  const bottomRef   = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const balance = transactions.reduce((acc, t) => {
@@ -61,7 +60,7 @@ export default function IAPage() {
     if (!text || loading) return;
 
     const userMsg: ChatMessage = { role: 'user', text };
-    const updatedHistory       = [...history, userMsg];
+    const updatedHistory = [...history, userMsg];
     setHistory(updatedHistory);
     setInput('');
     setLoading(true);
@@ -88,7 +87,7 @@ export default function IAPage() {
         ...updatedHistory,
         {
           role: 'model',
-          text: 'No pude conectarme. Verificá tu conexión y que **GEMINI_API_KEY** esté configurada en `.env.local`.',
+          text: 'No pude conectarme. Verificá tu conexión y que GEMINI_API_KEY esté en .env.local.',
         },
       ]);
     } finally {
@@ -104,7 +103,6 @@ export default function IAPage() {
     }
   };
 
-  // Auto-resize del textarea
   const handleInput = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setInput(e.target.value);
     e.target.style.height = 'auto';
@@ -115,7 +113,6 @@ export default function IAPage() {
     <PageTransition>
       <main className="h-screen flex flex-col p-6 md:p-10 max-w-4xl mx-auto gap-6">
 
-        {/* Header */}
         <div className="flex items-center justify-between flex-shrink-0">
           <div className="flex items-center gap-4">
             <motion.div
@@ -128,9 +125,7 @@ export default function IAPage() {
             </motion.div>
             <div>
               <h1 className="text-2xl font-black text-white">Analista FinancIA</h1>
-              <p className="text-slate-500 text-xs">
-                Gemini 1.5 Flash · contexto financiero en vivo
-              </p>
+              <p className="text-slate-500 text-xs">Gemini 1.5 Flash · contexto financiero en vivo</p>
             </div>
           </div>
 
@@ -147,36 +142,30 @@ export default function IAPage() {
           )}
         </div>
 
-        {/* Error de API key */}
         {apiError && (
           <motion.div
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
-            className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-4 text-xs text-amber-400 font-medium flex-shrink-0"
+            className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-4 text-xs text-amber-400 font-medium flex-shrink-0 space-y-2"
           >
-            <strong>⚠️ Configuración requerida:</strong> Creá un archivo{' '}
-            <code className="bg-white/10 px-1 py-0.5 rounded">.env.local</code> en la raíz del
-            proyecto con:
-            <pre className="mt-2 bg-black/30 rounded-xl p-3 font-mono text-emerald-400">
+            <p className="font-black">Configuración requerida</p>
+            <p>
+              Creá el archivo{' '}
+              <code className="bg-white/10 px-1 py-0.5 rounded">.env.local</code>{' '}
+              en la raíz del proyecto con:
+            </p>
+            <pre className="bg-black/30 rounded-xl p-3 font-mono text-emerald-400 text-[11px]">
               GEMINI_API_KEY=tu_api_key_aqui
             </pre>
-            Conseguí tu API key gratis en{' '}
-            
-              href="https://aistudio.google.com/apikey"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="underline text-emerald-400"
-            >
-              aistudio.google.com
-            </a>
-            {' '}y reiniciá el servidor con <code className="bg-white/10 px-1 py-0.5 rounded">npm run dev</code>.
+            <p>
+              Conseguila gratis en aistudio.google.com y reiniciá con{' '}
+              <code className="bg-white/10 px-1 py-0.5 rounded">npm run dev</code>.
+            </p>
           </motion.div>
         )}
 
-        {/* Área de chat */}
         <div className="flex-1 bg-slate-900 rounded-[3rem] border border-white/10 overflow-hidden flex flex-col min-h-0">
 
-          {/* Mensajes */}
           <div className="flex-1 overflow-y-auto p-6 md:p-8 space-y-4">
             <AnimatePresence initial={false}>
               {history.length === 0 ? (
@@ -213,13 +202,11 @@ export default function IAPage() {
                     transition={{ duration: 0.25 }}
                     className={`flex gap-3 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
                   >
-                    {/* Avatar del modelo */}
                     {msg.role === 'model' && (
                       <div className="w-8 h-8 bg-emerald-500/10 rounded-xl flex items-center justify-center flex-shrink-0 mt-1">
                         <Bot size={14} className="text-emerald-400" />
                       </div>
                     )}
-
                     <div
                       className={`max-w-[80%] px-5 py-4 rounded-[1.5rem] text-sm leading-relaxed ${
                         msg.role === 'user'
@@ -227,12 +214,8 @@ export default function IAPage() {
                           : 'bg-white/5 text-slate-300 rounded-bl-sm border border-white/10'
                       }`}
                     >
-                      {msg.role === 'model'
-                        ? renderMarkdown(msg.text)
-                        : msg.text}
+                      {msg.role === 'model' ? renderMarkdown(msg.text) : msg.text}
                     </div>
-
-                    {/* Avatar del usuario */}
                     {msg.role === 'user' && (
                       <div className="w-8 h-8 bg-white/10 rounded-xl flex items-center justify-center flex-shrink-0 mt-1">
                         <User size={14} className="text-slate-400" />
@@ -243,7 +226,6 @@ export default function IAPage() {
               )}
             </AnimatePresence>
 
-            {/* Indicador de carga */}
             {loading && (
               <motion.div
                 initial={{ opacity: 0, y: 8 }}
@@ -255,18 +237,21 @@ export default function IAPage() {
                 </div>
                 <div className="bg-white/5 border border-white/10 px-5 py-4 rounded-[1.5rem] rounded-bl-sm">
                   <div className="flex gap-1.5 items-center">
-                    {[0, 150, 300].map((delay) => (
-                      <motion.span
-                        key={delay}
-                        animate={{ y: [0, -4, 0] }}
-                        transition={{
-                          duration: 0.6,
-                          repeat: Infinity,
-                          delay: delay / 1000,
-                        }}
-                        className="w-2 h-2 bg-emerald-500 rounded-full block"
-                      />
-                    ))}
+                    <motion.span
+                      animate={{ y: [0, -4, 0] }}
+                      transition={{ duration: 0.6, repeat: Infinity, delay: 0 }}
+                      className="w-2 h-2 bg-emerald-500 rounded-full block"
+                    />
+                    <motion.span
+                      animate={{ y: [0, -4, 0] }}
+                      transition={{ duration: 0.6, repeat: Infinity, delay: 0.15 }}
+                      className="w-2 h-2 bg-emerald-500 rounded-full block"
+                    />
+                    <motion.span
+                      animate={{ y: [0, -4, 0] }}
+                      transition={{ duration: 0.6, repeat: Infinity, delay: 0.3 }}
+                      className="w-2 h-2 bg-emerald-500 rounded-full block"
+                    />
                   </div>
                 </div>
               </motion.div>
@@ -275,7 +260,6 @@ export default function IAPage() {
             <div ref={bottomRef} />
           </div>
 
-          {/* Input */}
           <div className="border-t border-white/5 p-4 flex items-end gap-3 flex-shrink-0">
             <textarea
               ref={textareaRef}
