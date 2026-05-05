@@ -1,7 +1,8 @@
 import type { Metadata, Viewport } from 'next';
-import AppLayout   from '../components/AppLayout';
-import AuthProvider  from '../components/AuthProvider';
-import ThemeProvider from '../components/ThemeProvider';
+import AppLayout             from '../components/AppLayout';
+import AuthProvider          from '../components/AuthProvider';
+import ThemeProvider         from '../components/ThemeProvider';
+import ServiceWorkerRegister from '../components/ServiceWorkerRegister';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -29,6 +30,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="es">
       <body className="bg-[#080A12]">
+        <ServiceWorkerRegister />
         <AuthProvider>
           <ThemeProvider>
             <AppLayout>
