@@ -23,6 +23,16 @@ export interface Budget {
   currency: 'ARS' | 'USD';
 }
 
+// Registro de que una factura de tarjeta fue pagada
+export interface CardBillPayment {
+  id: string;
+  cardId: string;
+  billingMonth: number; // mes de consumo (no de pago)
+  billingYear: number;
+  paidAt: string;       // ISO date
+  totalPaid: number;    // en ARS
+}
+
 export interface Card {
   id: string;
   bank: string;
@@ -45,7 +55,7 @@ export interface Transaction {
   type: 'income' | 'expense';
   incomeType?: 'fixed' | 'variable';
   category?: TransactionCategory;
-  date: string;       // mes en que se realizó el consumo
+  date: string;
   installments: number;
   currentInstallment: number;
   cardId?: string;
@@ -55,6 +65,7 @@ interface FinanceState {
   cards: Card[];
   transactions: Transaction[];
   budgets: Budget[];
+  billPayments: CardBillPayment[];
   exchangeRate: number;
   userName: string;
   accentTheme: AccentTheme;
@@ -65,12 +76,16 @@ interface FinanceState {
   removeTransaction: (id: string) => void;
   setBudget: (category: TransactionCategory, amount: number, currency: 'ARS' | 'USD') => void;
   removeBudget: (category: TransactionCategory) => void;
+  markCardBillAsPaid: (cardId: string, billingMonth: number, billingYear: number) => void;
+  unmarkCardBillAsPaid: (cardId: string, billingMonth: number, billingYear: number) => void;
   setExchangeRate: (rate: number) => void;
   setUserName: (name: string) => void;
   setAccentTheme: (theme: AccentTheme) => void;
   setOnboardingComplete: () => void;
   resetAll: () => void;
 }
+
+// ── Helpers de tarjeta ────────────────────────────────────────────────────────
 
 function monthsPassedSince(dateISO: string): number {
   const txDate = new Date(dateISO);
@@ -121,12 +136,15 @@ function applyRestorationToCard(card: Card, deduction: number): Card {
   };
 }
 
+// ── Store ─────────────────────────────────────────────────────────────────────
+
 export const useFinanceStore = create<FinanceState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       cards:              [],
       transactions:       [],
       budgets:            [],
+      billPayments:       [],
       exchangeRate:       1000,
       userName:           'Usuario FinancIA',
       accentTheme:        'emerald',
@@ -147,15 +165,74 @@ export const useFinanceStore = create<FinanceState>()(
               ),
             };
           }
-          return {
-            budgets: [...state.budgets, { id: generateId(), category, amount, currency }],
-          };
+          return { budgets: [...state.budgets, { id: generateId(), category, amount, currency }] };
         }),
 
       removeBudget: (category) =>
         set((state) => ({
           budgets: state.budgets.filter((b) => b.category !== category),
         })),
+
+      // Marca el resumen de una tarjeta como pagado y restaura el límite disponible
+      markCardBillAsPaid: (cardId, billingMonth, billingYear) =>
+        set((state) => {
+          const alreadyPaid = state.billPayments.some(
+            (p) => p.cardId === cardId && p.billingMonth === billingMonth && p.billingYear === billingYear
+          );
+          if (alreadyPaid) return state;
+
+          // Calcula el total del resumen (consumos de ese mes de crédito)
+          const billTxs = state.transactions.filter((t) => {
+            if (t.type !== 'expense' || t.method !== 'Crédito' || t.cardId !== cardId) return false;
+            const d = new Date(t.date);
+            return d.getMonth() === billingMonth && d.getFullYear() === billingYear;
+          });
+
+          const totalPaid = billTxs.reduce((acc, t) => {
+            const monthly = t.installments > 1 ? t.amount / t.installments : t.amount;
+            return acc + (t.currency === 'USD' ? monthly * state.exchangeRate : monthly);
+          }, 0);
+
+          // Restaura el límite disponible de la tarjeta
+          const updatedCards = state.cards.map((card) => {
+            if (card.id !== cardId) return card;
+            return applyRestorationToCard(card, totalPaid);
+          });
+
+          return {
+            cards: updatedCards,
+            billPayments: [
+              ...state.billPayments,
+              {
+                id: generateId(),
+                cardId,
+                billingMonth,
+                billingYear,
+                paidAt: new Date().toISOString(),
+                totalPaid,
+              },
+            ],
+          };
+        }),
+
+      unmarkCardBillAsPaid: (cardId, billingMonth, billingYear) =>
+        set((state) => {
+          const payment = state.billPayments.find(
+            (p) => p.cardId === cardId && p.billingMonth === billingMonth && p.billingYear === billingYear
+          );
+          if (!payment) return state;
+
+          // Revierte la restauración del límite
+          const updatedCards = state.cards.map((card) => {
+            if (card.id !== cardId) return card;
+            return applyDeductionToCard(card, payment.totalPaid);
+          });
+
+          return {
+            cards: updatedCards,
+            billPayments: state.billPayments.filter((p) => p.id !== payment.id),
+          };
+        }),
 
       addCard: (card) =>
         set((state) => ({
@@ -208,6 +285,7 @@ export const useFinanceStore = create<FinanceState>()(
       resetAll: () =>
         set((state) => ({
           transactions: [],
+          billPayments: [],
           cards: state.cards.map((card) => ({
             ...card,
             availableOnePayment:   card.limitOnePayment,
@@ -219,39 +297,77 @@ export const useFinanceStore = create<FinanceState>()(
   )
 );
 
-// Monto mensual de la cuota (para cuotas divide por total, para resto es el monto completo)
+// ── Helpers exportados ────────────────────────────────────────────────────────
+
 export function getMonthlyAmount(t: Transaction): number {
   if (t.type === 'expense' && t.installments > 1) return t.amount / t.installments;
   return t.amount;
 }
 
 /**
- * Devuelve la fecha en que un gasto de crédito REALMENTE impacta el balance.
- * Los consumos de crédito se pagan el mes SIGUIENTE al de la transacción.
- * Efectivo y débito impactan en el mismo mes.
+ * Para una transacción de crédito en cuotas, devuelve el número de cuota
+ * que corresponde al mes/año indicado.
  */
-export function getPaymentDate(t: Transaction): Date {
-  const txDate = new Date(t.date);
-  if (t.type === 'expense' && t.method === 'Crédito') {
-    return new Date(txDate.getFullYear(), txDate.getMonth() + 1, 1);
+export function getInstallmentForMonth(
+  t: Transaction,
+  month: number,
+  year: number
+): number {
+  if (t.type !== 'expense' || t.method !== 'Crédito' || t.installments <= 1) {
+    return t.currentInstallment;
   }
-  return txDate;
+  const purchaseDate     = new Date(t.date);
+  const purchaseMonthAbs = purchaseDate.getFullYear() * 12 + purchaseDate.getMonth();
+  const targetMonthAbs   = year * 12 + month;
+  const offset           = targetMonthAbs - purchaseMonthAbs - 1;
+  return t.currentInstallment + offset;
 }
 
 /**
- * Filtra transacciones que impactan en un mes/año dado.
- * Para crédito: impacta en mes+1 del registro.
- * Para todo lo demás: impacta en el mes del registro.
+ * Filtra transacciones que IMPACTAN en el balance de un mes/año:
+ * - Efectivo/Débito: impactan en el mes de la transacción
+ * - Crédito 1 pago: impacta en el mes siguiente
+ * - Crédito cuotas: cada cuota impacta en el mes correspondiente
+ *   (cuota N° currentInstallment en purchaseMonth+1, siguientes en meses sucesivos)
  */
 export function filterByImpactMonth(
   transactions: Transaction[],
   month: number,
   year: number
 ): Transaction[] {
+  const targetMonthAbs = year * 12 + month;
+
   return transactions.filter((t) => {
-    const payDate = getPaymentDate(t);
-    return payDate.getMonth() === month && payDate.getFullYear() === year;
+    if (t.type !== 'expense' || t.method !== 'Crédito') {
+      // Ingresos y gastos no-crédito: mismo mes
+      const d = new Date(t.date);
+      return d.getMonth() === month && d.getFullYear() === year;
+    }
+
+    const purchaseDate     = new Date(t.date);
+    const purchaseMonthAbs = purchaseDate.getFullYear() * 12 + purchaseDate.getMonth();
+
+    if (t.installments <= 1) {
+      // 1 pago con crédito: mes siguiente al consumo
+      return targetMonthAbs === purchaseMonthAbs + 1;
+    }
+
+    // Cuotas:
+    // - currentInstallment paga en purchaseMonth + 1
+    // - la última cuota (installments) paga en purchaseMonth + 1 + (installments - currentInstallment)
+    const firstPaymentMonthAbs = purchaseMonthAbs + 1;
+    const lastPaymentMonthAbs  = firstPaymentMonthAbs + (t.installments - t.currentInstallment);
+
+    return targetMonthAbs >= firstPaymentMonthAbs && targetMonthAbs <= lastPaymentMonthAbs;
   });
+}
+
+export function getPaymentDate(t: Transaction): Date {
+  const txDate = new Date(t.date);
+  if (t.type === 'expense' && t.method === 'Crédito') {
+    return new Date(txDate.getFullYear(), txDate.getMonth() + 1, 1);
+  }
+  return txDate;
 }
 
 export function getDaysUntil(day: number): number {
