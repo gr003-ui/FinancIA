@@ -6,7 +6,7 @@ export async function POST(req: NextRequest) {
 
   if (!apiKey) {
     return NextResponse.json(
-      { error: 'GEMINI_API_KEY no está en .env.local. Agregala y reiniciá con npm run dev.' },
+      { error: 'GEMINI_API_KEY no está en .env.local.' },
       { status: 500 }
     );
   }
@@ -16,7 +16,7 @@ export async function POST(req: NextRequest) {
     body = await req.json();
   } catch {
     return NextResponse.json(
-      { error: 'El archivo puede ser demasiado grande o el formato es inválido.' },
+      { error: 'Archivo demasiado grande o formato inválido.' },
       { status: 400 }
     );
   }
@@ -52,15 +52,15 @@ El formato debe ser exactamente este array:
   }
 ]
 Reglas:
-- Para cuotas: totalInstallments = total de cuotas, currentInstallment = cuota actual mostrada
-- amount = monto de ESA cuota (no el total)
+- Para cuotas: totalInstallments = total de cuotas, currentInstallment = cuota actual
+- amount = monto de ESA cuota, no el total
 - currency = "ARS" o "USD"
 - Solo consumos individuales, no totales ni saldos
 - Fechas en formato DD/MM/YYYY`;
 
   try {
     const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
 
     const result = await model.generateContent([
       { inlineData: { mimeType: safeMime, data: imageBase64 } },
@@ -68,7 +68,11 @@ Reglas:
     ]);
 
     const raw   = result.response.text().trim();
-    const clean = raw.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/```\s*$/i, '').trim();
+    const clean = raw
+      .replace(/^```json\s*/i, '')
+      .replace(/^```\s*/i, '')
+      .replace(/```\s*$/i, '')
+      .trim();
 
     let parsed: unknown;
     try {
@@ -82,7 +86,7 @@ Reglas:
 
     if (!Array.isArray(parsed)) {
       return NextResponse.json(
-        { error: 'La respuesta no es un array. Probá con otra imagen.', raw: raw.slice(0, 300) },
+        { error: 'La respuesta no es un array. Probá con otra imagen.' },
         { status: 422 }
       );
     }
