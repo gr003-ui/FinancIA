@@ -6,7 +6,7 @@ export async function POST(req: NextRequest) {
 
   if (!apiKey) {
     return NextResponse.json(
-      { text: 'Error: GEMINI_API_KEY no está en .env.local. Agregala y reiniciá con npm run dev.' },
+      { text: 'Error: GEMINI_API_KEY no está en .env.local.', retryAfter: 0 },
       { status: 200 }
     );
   }
@@ -22,13 +22,19 @@ export async function POST(req: NextRequest) {
   try {
     body = await req.json();
   } catch {
-    return NextResponse.json({ text: 'Error: body inválido.' }, { status: 400 });
+    return NextResponse.json({ text: 'Error: body inválido.', retryAfter: 0 }, { status: 400 });
   }
 
-  const { message, history = [], balance = 0, exchangeRate = 1000, transactions = [] } = body;
+  const {
+    message,
+    history      = [],
+    balance      = 0,
+    exchangeRate = 1000,
+    transactions = [],
+  } = body;
 
   if (!message) {
-    return NextResponse.json({ text: 'Error: mensaje vacío.' }, { status: 400 });
+    return NextResponse.json({ text: 'Mensaje vacío.', retryAfter: 0 }, { status: 400 });
   }
 
   const formatM = (v: number) =>
@@ -37,58 +43,56 @@ export async function POST(req: NextRequest) {
     }).format(v);
 
   const systemPrompt = `Sos FinancIA, un analista financiero experto en el mercado argentino.
-Contexto actual del usuario:
-- Saldo neto del período: ${formatM(balance)}
-- Cotización USD/ARS blue: $${exchangeRate}
-- Últimos movimientos: ${JSON.stringify(transactions.slice(0, 10))}
+Contexto actual:
+- Saldo neto: ${formatM(balance)}
+- Cotización USD/ARS: $${exchangeRate}
+- Últimos movimientos: ${JSON.stringify((transactions as unknown[]).slice(0, 8))}
 
-Respondé siempre en español rioplatense, de forma concisa (máximo 3-4 párrafos).
-Usá **negrita** para resaltar números o conceptos clave.
-Si el usuario gasta mucho en no esenciales, podés ser levemente irónico pero constructivo.`;
+Reglas:
+- Respondé en español rioplatense, máximo 3-4 párrafos
+- Usá **negrita** para números clave
+- Si gasta mucho en no esenciales, sé levemente irónico pero constructivo
+- No inventes datos que no estén en el contexto`;
 
   try {
     const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
+    // gemini-2.0-flash-lite: 30 RPM gratuitos (vs 15 de flash)
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash-lite' });
 
     const geminiHistory = [
-      {
-        role: 'user' as const,
-        parts: [{ text: systemPrompt }],
-      },
-      {
-        role: 'model' as const,
-        parts: [{ text: 'Entendido. Soy FinancIA. ¿En qué te puedo ayudar?' }],
-      },
+      { role: 'user'  as const, parts: [{ text: systemPrompt }] },
+      { role: 'model' as const, parts: [{ text: 'Entendido. Soy FinancIA. ¿En qué te puedo ayudar?' }] },
       ...(history as { role: string; text: string }[]).map((m) => ({
-        role: m.role === 'user' ? 'user' as const : 'model' as const,
+        role:  m.role === 'user' ? 'user' as const : 'model' as const,
         parts: [{ text: m.text }],
       })),
     ];
 
     const chat   = model.startChat({ history: geminiHistory });
     const result = await chat.sendMessage(message);
-    const text   = result.response.text();
 
-    return NextResponse.json({ text });
+    return NextResponse.json({ text: result.response.text(), retryAfter: 0 });
 
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error('Gemini /api/chat error:', msg);
 
-    if (msg.includes('API_KEY_INVALID') || msg.includes('PERMISSION_DENIED')) {
+    if (msg.includes('429') || msg.includes('RESOURCE_EXHAUSTED')) {
       return NextResponse.json({
-        text: `Error: API Key inválida o sin permisos. Verificá que la key en .env.local sea correcta y reiniciá el servidor.`,
+        text: '__QUOTA__',
+        retryAfter: 60,
       });
     }
-
-    if (msg.includes('RESOURCE_EXHAUSTED')) {
+    if (msg.includes('API_KEY_INVALID') || msg.includes('PERMISSION_DENIED')) {
       return NextResponse.json({
-        text: `Límite de Gemini alcanzado. Esperá unos minutos e intentá de nuevo.`,
+        text: 'API Key inválida. Verificá GEMINI_API_KEY en .env.local y reiniciá el servidor.',
+        retryAfter: 0,
       });
     }
 
     return NextResponse.json({
-      text: `Error de Gemini: ${msg.slice(0, 200)}. Reiniciá el servidor con npm run dev.`,
+      text: `Error inesperado: ${msg.slice(0, 150)}`,
+      retryAfter: 0,
     });
   }
 }

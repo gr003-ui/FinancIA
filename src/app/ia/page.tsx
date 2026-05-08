@@ -1,7 +1,7 @@
 "use client";
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { useFinanceStore, getMonthlyAmount } from '../../store/useFinanceStore';
-import { BrainCircuit, Send, Sparkles, Trash2, User, Bot } from 'lucide-react';
+import { BrainCircuit, Send, Sparkles, Trash2, User, Bot, Clock } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import PageTransition from '../../components/motion/PageTransition';
 
@@ -37,12 +37,13 @@ const QUICK_ACTIONS = [
 
 export default function IAPage() {
   const { transactions, exchangeRate } = useFinanceStore();
-  const [history,  setHistory]  = useState<ChatMessage[]>([]);
-  const [input,    setInput]    = useState('');
-  const [loading,  setLoading]  = useState(false);
-  const [apiError, setApiError] = useState(false);
+  const [history,    setHistory]    = useState<ChatMessage[]>([]);
+  const [input,      setInput]      = useState('');
+  const [loading,    setLoading]    = useState(false);
+  const [countdown,  setCountdown]  = useState(0); // segundos hasta poder reintentar
   const bottomRef   = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const timerRef    = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const balance = transactions.reduce((acc, t) => {
     const val = t.currency === 'USD'
@@ -55,16 +56,34 @@ export default function IAPage() {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [history, loading]);
 
+  // Limpieza del timer al desmontar
+  useEffect(() => {
+    return () => { if (timerRef.current) clearInterval(timerRef.current); };
+  }, []);
+
+  const startCountdown = useCallback((seconds: number) => {
+    setCountdown(seconds);
+    if (timerRef.current) clearInterval(timerRef.current);
+    timerRef.current = setInterval(() => {
+      setCountdown((prev) => {
+        if (prev <= 1) {
+          if (timerRef.current) clearInterval(timerRef.current);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  }, []);
+
   const handleSend = async (messageText?: string) => {
     const text = (messageText ?? input).trim();
-    if (!text || loading) return;
+    if (!text || loading || countdown > 0) return;
 
     const userMsg: ChatMessage = { role: 'user', text };
     const updatedHistory = [...history, userMsg];
     setHistory(updatedHistory);
     setInput('');
     setLoading(true);
-    setApiError(false);
 
     try {
       const res = await fetch('/api/chat', {
@@ -79,16 +98,32 @@ export default function IAPage() {
         }),
       });
 
-      const data = await res.json();
-      setHistory([...updatedHistory, { role: 'model', text: data.text }]);
+      type ApiResp = { text: string; retryAfter?: number };
+      let data: ApiResp;
+
+      try {
+        data = await res.json() as ApiResp;
+      } catch {
+        data = { text: 'Error de red. Verificá tu conexión.', retryAfter: 0 };
+      }
+
+      if (data.text === '__QUOTA__') {
+        const wait = data.retryAfter ?? 60;
+        startCountdown(wait);
+        setHistory([
+          ...updatedHistory,
+          {
+            role: 'model',
+            text: `__QUOTA__:${wait}`,
+          },
+        ]);
+      } else {
+        setHistory([...updatedHistory, { role: 'model', text: data.text }]);
+      }
     } catch {
-      setApiError(true);
       setHistory([
         ...updatedHistory,
-        {
-          role: 'model',
-          text: 'No pude conectarme. Verificá tu conexión y que GEMINI_API_KEY esté en .env.local.',
-        },
+        { role: 'model', text: 'Error de red. Verificá tu conexión.' },
       ]);
     } finally {
       setLoading(false);
@@ -109,10 +144,13 @@ export default function IAPage() {
     e.target.style.height = `${Math.min(e.target.scrollHeight, 120)}px`;
   };
 
+  const isDisabled = loading || countdown > 0;
+
   return (
     <PageTransition>
       <main className="h-screen flex flex-col p-6 md:p-10 max-w-4xl mx-auto gap-6">
 
+        {/* Header */}
         <div className="flex items-center justify-between flex-shrink-0">
           <div className="flex items-center gap-4">
             <motion.div
@@ -125,7 +163,9 @@ export default function IAPage() {
             </motion.div>
             <div>
               <h1 className="text-2xl font-black text-white">Analista FinancIA</h1>
-              <p className="text-slate-500 text-xs">Gemini 1.5 Flash · contexto financiero en vivo</p>
+              <p className="text-slate-500 text-xs">
+                Gemini 2.0 Flash Lite · 30 consultas/min gratuitas
+              </p>
             </div>
           </div>
 
@@ -133,7 +173,7 @@ export default function IAPage() {
             <motion.button
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              onClick={() => setHistory([])}
+              onClick={() => { setHistory([]); setCountdown(0); }}
               className="flex items-center gap-2 p-3 rounded-2xl text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 transition-all text-xs font-bold"
             >
               <Trash2 size={14} />
@@ -142,30 +182,29 @@ export default function IAPage() {
           )}
         </div>
 
-        {apiError && (
+        {/* Aviso de quota */}
+        {countdown > 0 && (
           <motion.div
-            initial={{ opacity: 0, y: -10 }}
+            initial={{ opacity: 0, y: -8 }}
             animate={{ opacity: 1, y: 0 }}
-            className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-4 text-xs text-amber-400 font-medium flex-shrink-0 space-y-2"
+            className="flex items-center gap-3 bg-amber-500/10 border border-amber-500/20 rounded-2xl p-4 flex-shrink-0"
           >
-            <p className="font-black">Configuración requerida</p>
-            <p>
-              Creá el archivo{' '}
-              <code className="bg-white/10 px-1 py-0.5 rounded">.env.local</code>{' '}
-              en la raíz del proyecto con:
-            </p>
-            <pre className="bg-black/30 rounded-xl p-3 font-mono text-emerald-400 text-[11px]">
-              GEMINI_API_KEY=tu_api_key_aqui
-            </pre>
-            <p>
-              Conseguila gratis en aistudio.google.com y reiniciá con{' '}
-              <code className="bg-white/10 px-1 py-0.5 rounded">npm run dev</code>.
-            </p>
+            <Clock size={16} className="text-amber-400 flex-shrink-0" />
+            <div className="flex-1">
+              <p className="text-amber-400 font-black text-sm">Límite de consultas alcanzado</p>
+              <p className="text-amber-400/70 text-xs mt-0.5">
+                Podés enviar otra consulta en{' '}
+                <strong className="text-amber-300">{countdown} segundo{countdown !== 1 ? 's' : ''}</strong>
+              </p>
+            </div>
+            <div className="w-10 h-10 rounded-xl bg-amber-500/10 flex items-center justify-center flex-shrink-0">
+              <span className="text-amber-400 font-black text-sm">{countdown}</span>
+            </div>
           </motion.div>
         )}
 
+        {/* Chat area */}
         <div className="flex-1 bg-slate-900 rounded-[3rem] border border-white/10 overflow-hidden flex flex-col min-h-0">
-
           <div className="flex-1 overflow-y-auto p-6 md:p-8 space-y-4">
             <AnimatePresence initial={false}>
               {history.length === 0 ? (
@@ -186,7 +225,8 @@ export default function IAPage() {
                         whileHover={{ scale: 1.02 }}
                         whileTap={{ scale: 0.98 }}
                         onClick={() => handleSend(action)}
-                        className="text-left p-4 bg-white/5 hover:bg-emerald-500/10 hover:text-emerald-400 border border-white/10 hover:border-emerald-500/30 rounded-2xl text-xs font-bold text-slate-400 transition-all"
+                        disabled={isDisabled}
+                        className="text-left p-4 bg-white/5 hover:bg-emerald-500/10 hover:text-emerald-400 border border-white/10 hover:border-emerald-500/30 rounded-2xl text-xs font-bold text-slate-400 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
                       >
                         {action}
                       </motion.button>
@@ -194,35 +234,56 @@ export default function IAPage() {
                   </div>
                 </motion.div>
               ) : (
-                history.map((msg, i) => (
-                  <motion.div
-                    key={i}
-                    initial={{ opacity: 0, y: 12 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.25 }}
-                    className={`flex gap-3 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
-                  >
-                    {msg.role === 'model' && (
-                      <div className="w-8 h-8 bg-emerald-500/10 rounded-xl flex items-center justify-center flex-shrink-0 mt-1">
-                        <Bot size={14} className="text-emerald-400" />
-                      </div>
-                    )}
-                    <div
-                      className={`max-w-[80%] px-5 py-4 rounded-[1.5rem] text-sm leading-relaxed ${
-                        msg.role === 'user'
-                          ? 'bg-emerald-500 text-white rounded-br-sm font-medium'
-                          : 'bg-white/5 text-slate-300 rounded-bl-sm border border-white/10'
-                      }`}
+                history.map((msg, i) => {
+                  const isQuota = msg.role === 'model' && msg.text.startsWith('__QUOTA__');
+                  const waitSecs = isQuota ? parseInt(msg.text.split(':')[1] ?? '60') : 0;
+
+                  return (
+                    <motion.div
+                      key={i}
+                      initial={{ opacity: 0, y: 12 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.25 }}
+                      className={`flex gap-3 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
                     >
-                      {msg.role === 'model' ? renderMarkdown(msg.text) : msg.text}
-                    </div>
-                    {msg.role === 'user' && (
-                      <div className="w-8 h-8 bg-white/10 rounded-xl flex items-center justify-center flex-shrink-0 mt-1">
-                        <User size={14} className="text-slate-400" />
-                      </div>
-                    )}
-                  </motion.div>
-                ))
+                      {msg.role === 'model' && (
+                        <div className="w-8 h-8 bg-emerald-500/10 rounded-xl flex items-center justify-center flex-shrink-0 mt-1">
+                          <Bot size={14} className="text-emerald-400" />
+                        </div>
+                      )}
+
+                      {isQuota ? (
+                        <div className="max-w-[80%] px-5 py-4 rounded-[1.5rem] rounded-bl-sm bg-amber-500/10 border border-amber-500/20 text-sm">
+                          <div className="flex items-center gap-2 text-amber-400 font-black mb-1">
+                            <Clock size={14} />
+                            <span>Límite de consultas alcanzado</span>
+                          </div>
+                          <p className="text-amber-400/70 text-xs">
+                            La API gratuita de Gemini tiene un límite de 30 consultas por minuto.
+                            Esperá {waitSecs} segundos y volvé a intentar.
+                            Para uso ilimitado, activá facturación en Google Cloud Console.
+                          </p>
+                        </div>
+                      ) : (
+                        <div
+                          className={`max-w-[80%] px-5 py-4 rounded-[1.5rem] text-sm leading-relaxed ${
+                            msg.role === 'user'
+                              ? 'bg-emerald-500 text-white rounded-br-sm font-medium'
+                              : 'bg-white/5 text-slate-300 rounded-bl-sm border border-white/10'
+                          }`}
+                        >
+                          {msg.role === 'model' ? renderMarkdown(msg.text) : msg.text}
+                        </div>
+                      )}
+
+                      {msg.role === 'user' && (
+                        <div className="w-8 h-8 bg-white/10 rounded-xl flex items-center justify-center flex-shrink-0 mt-1">
+                          <User size={14} className="text-slate-400" />
+                        </div>
+                      )}
+                    </motion.div>
+                  );
+                })
               )}
             </AnimatePresence>
 
@@ -260,12 +321,18 @@ export default function IAPage() {
             <div ref={bottomRef} />
           </div>
 
+          {/* Input */}
           <div className="border-t border-white/5 p-4 flex items-end gap-3 flex-shrink-0">
             <textarea
               ref={textareaRef}
               rows={1}
-              className="flex-1 bg-white/5 border border-white/10 rounded-2xl px-4 py-3 text-white text-sm resize-none outline-none placeholder:text-slate-600 focus:border-emerald-500/50 transition-all"
-              placeholder="Escribí tu consulta... (Enter para enviar, Shift+Enter para nueva línea)"
+              disabled={isDisabled}
+              className="flex-1 bg-white/5 border border-white/10 rounded-2xl px-4 py-3 text-white text-sm resize-none outline-none placeholder:text-slate-600 focus:border-emerald-500/50 transition-all disabled:opacity-40"
+              placeholder={
+                countdown > 0
+                  ? `Esperá ${countdown}s antes de enviar otra consulta...`
+                  : 'Escribí tu consulta... (Enter para enviar)'
+              }
               value={input}
               onChange={handleInput}
               onKeyDown={handleKeyDown}
@@ -273,9 +340,9 @@ export default function IAPage() {
             />
             <motion.button
               onClick={() => handleSend()}
-              disabled={!input.trim() || loading}
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
+              disabled={!input.trim() || isDisabled}
+              whileHover={{ scale: isDisabled ? 1 : 1.05 }}
+              whileTap={{ scale: isDisabled ? 1 : 0.95 }}
               className="p-3 bg-emerald-500 rounded-xl text-white hover:bg-emerald-400 transition-all disabled:opacity-30 disabled:cursor-not-allowed flex-shrink-0"
             >
               <Send size={18} />
