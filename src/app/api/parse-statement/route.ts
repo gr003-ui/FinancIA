@@ -1,22 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { parseStatementText } from '../../../lib/statementParser';
 
 export async function POST(req: NextRequest) {
-  const apiKey = process.env.GEMINI_API_KEY;
-
-  if (!apiKey) {
-    return NextResponse.json(
-      { error: 'GEMINI_API_KEY no está en .env.local.' },
-      { status: 500 }
-    );
-  }
-
   let body: { imageBase64?: string; mimeType?: string };
   try {
     body = await req.json();
   } catch {
     return NextResponse.json(
-      { error: 'Archivo demasiado grande o formato inválido.' },
+      { error: 'Archivo inválido o demasiado grande.' },
       { status: 400 }
     );
   }
@@ -27,97 +18,76 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'No se recibió ningún archivo.' }, { status: 400 });
   }
 
-  const estimatedKB = (imageBase64.length * 0.75) / 1024;
-  if (estimatedKB > 15000) {
+  const isPDF = mimeType === 'application/pdf' ||
+                (mimeType ?? '').includes('pdf');
+
+  if (!isPDF) {
     return NextResponse.json(
-      { error: 'Archivo demasiado grande (máx ~15MB). Probá con una foto JPG.' },
+      {
+        error:
+          'Solo se soportan archivos PDF. Para imágenes, usá la opción de carga manual ' +
+          'o convertí la imagen a PDF primero.',
+      },
+      { status: 400 }
+    );
+  }
+
+  const estimatedKB = (imageBase64.length * 0.75) / 1024;
+  if (estimatedKB > 20000) {
+    return NextResponse.json(
+      { error: 'PDF demasiado grande (máx 20MB).' },
       { status: 413 }
     );
   }
 
-  const safeMime = mimeType ?? 'image/jpeg';
-
-  const prompt = `Analizá esta imagen de un resumen de tarjeta de crédito argentina.
-Extraé TODOS los consumos/movimientos que veas.
-Respondé ÚNICAMENTE con un JSON válido, sin texto adicional, sin markdown, sin backticks.
-El formato debe ser exactamente este array:
-[
-  {
-    "date": "DD/MM/YYYY",
-    "description": "descripción del consumo",
-    "amount": 1234.56,
-    "currentInstallment": 1,
-    "totalInstallments": 1,
-    "currency": "ARS"
-  }
-]
-Reglas:
-- Para cuotas: totalInstallments = total de cuotas, currentInstallment = cuota actual
-- amount = monto de ESA cuota, no el total
-- currency = "ARS" o "USD"
-- Solo consumos individuales, no totales ni saldos
-- Fechas en formato DD/MM/YYYY`;
-
   try {
-    const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash-lite' });
+    // Importación dinámica para evitar problemas con el bundler
+    const pdfParse = (await import('pdf-parse')).default;
+    const buffer   = Buffer.from(imageBase64, 'base64');
+    const pdfData  = await pdfParse(buffer);
+    const text     = pdfData.text;
 
-    const result = await model.generateContent([
-      { inlineData: { mimeType: safeMime, data: imageBase64 } },
-      { text: prompt },
-    ]);
-
-    const raw   = result.response.text().trim();
-    const clean = raw
-      .replace(/^```json\s*/i, '')
-      .replace(/^```\s*/i, '')
-      .replace(/```\s*$/i, '')
-      .trim();
-
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(clean);
-    } catch {
+    if (!text || text.trim().length < 20) {
       return NextResponse.json(
-        { error: 'Gemini no devolvió JSON válido. Probá con una foto más clara.', raw: raw.slice(0, 300) },
+        {
+          error:
+            'El PDF no contiene texto extraíble (puede ser una imagen escaneada). ' +
+            'Intentá con un PDF digital, no escaneado.',
+        },
         { status: 422 }
       );
     }
 
-    if (!Array.isArray(parsed)) {
+    const transactions = parseStatementText(text);
+
+    if (transactions.length === 0) {
       return NextResponse.json(
-        { error: 'La respuesta no es un array. Probá con otra imagen.' },
+        {
+          error:
+            'No se detectaron movimientos en el PDF. ' +
+            'Verificá que sea el resumen de consumos (no el resumen general). ' +
+            'También podés cargar los movimientos manualmente.',
+          rawText: text.slice(0, 500), // primeras 500 chars para debug
+        },
         { status: 422 }
       );
     }
 
-    return NextResponse.json({ transactions: parsed });
+    return NextResponse.json({ transactions });
 
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error('parse-statement error:', msg);
 
-    if (msg.includes('INVALID_ARGUMENT')) {
+    if (msg.includes('Invalid PDF') || msg.includes('pdf')) {
       return NextResponse.json(
-        { error: 'Gemini no pudo procesar el archivo. Probá con una foto JPG en lugar del PDF.' },
+        { error: 'El archivo no es un PDF válido o está protegido con contraseña.' },
         { status: 400 }
-      );
-    }
-    if (msg.includes('API_KEY_INVALID') || msg.includes('PERMISSION_DENIED')) {
-      return NextResponse.json(
-        { error: 'API Key inválida. Verificá GEMINI_API_KEY en .env.local.' },
-        { status: 401 }
-      );
-    }
-    if (msg.includes('RESOURCE_EXHAUSTED')) {
-      return NextResponse.json(
-        { error: 'Límite de Gemini alcanzado. Esperá unos minutos.' },
-        { status: 429 }
       );
     }
 
     return NextResponse.json(
-      { error: `Error: ${msg.slice(0, 200)}` },
+      { error: `Error al procesar el PDF: ${msg.slice(0, 150)}` },
       { status: 500 }
     );
   }
