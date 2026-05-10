@@ -4,9 +4,9 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 export async function POST(req: NextRequest) {
   const apiKey = process.env.GEMINI_API_KEY;
 
-  if (!apiKey) {
+  if (!apiKey || apiKey.trim() === '') {
     return NextResponse.json(
-      { text: 'Error: GEMINI_API_KEY no está en .env.local.', retryAfter: 0 },
+      { text: '__NO_KEY__', retryAfter: 0 },
       { status: 200 }
     );
   }
@@ -22,7 +22,7 @@ export async function POST(req: NextRequest) {
   try {
     body = await req.json();
   } catch {
-    return NextResponse.json({ text: 'Error: body inválido.', retryAfter: 0 }, { status: 400 });
+    return NextResponse.json({ text: 'Error: body invalido.', retryAfter: 0 }, { status: 400 });
   }
 
   const {
@@ -34,7 +34,7 @@ export async function POST(req: NextRequest) {
   } = body;
 
   if (!message) {
-    return NextResponse.json({ text: 'Mensaje vacío.', retryAfter: 0 }, { status: 400 });
+    return NextResponse.json({ text: 'Mensaje vacio.', retryAfter: 0 }, { status: 400 });
   }
 
   const formatM = (v: number) =>
@@ -45,54 +45,47 @@ export async function POST(req: NextRequest) {
   const systemPrompt = `Sos FinancIA, un analista financiero experto en el mercado argentino.
 Contexto actual:
 - Saldo neto: ${formatM(balance)}
-- Cotización USD/ARS: $${exchangeRate}
-- Últimos movimientos: ${JSON.stringify((transactions as unknown[]).slice(0, 8))}
+- Cotizacion USD/ARS: $${exchangeRate}
+- Ultimos movimientos: ${JSON.stringify((transactions).slice(0, 8))}
 
 Reglas:
-- Respondé en español rioplatense, máximo 3-4 párrafos
-- Usá **negrita** para números clave
-- Si gasta mucho en no esenciales, sé levemente irónico pero constructivo
-- No inventes datos que no estén en el contexto`;
+- Responde en espaniol rioplatense, maximo 3-4 parrafos
+- Usa **negrita** para numeros clave
+- Si gasta mucho en no esenciales, se levemente ironico pero constructivo
+- No inventes datos que no esten en el contexto`;
 
   try {
     const genAI = new GoogleGenerativeAI(apiKey);
-    // gemini-2.0-flash-lite: 30 RPM gratuitos (vs 15 de flash)
     const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash-lite' });
 
     const geminiHistory = [
-      { role: 'user'  as const, parts: [{ text: systemPrompt }] },
-      { role: 'model' as const, parts: [{ text: 'Entendido. Soy FinancIA. ¿En qué te puedo ayudar?' }] },
-      ...(history as { role: string; text: string }[]).map((m) => ({
-        role:  m.role === 'user' ? 'user' as const : 'model' as const,
+      { role: 'user'  , parts: [{ text: systemPrompt }] },
+      { role: 'model' , parts: [{ text: 'Entendido. Soy FinancIA.' }] },
+      ...history.map((m) => ({
+        role:  m.role === 'user' ? 'user' : 'model',
         parts: [{ text: m.text }],
       })),
     ];
 
     const chat   = model.startChat({ history: geminiHistory });
     const result = await chat.sendMessage(message);
-
     return NextResponse.json({ text: result.response.text(), retryAfter: 0 });
 
-  } catch (err: unknown) {
+  } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error('Gemini /api/chat error:', msg);
 
     if (msg.includes('429') || msg.includes('RESOURCE_EXHAUSTED')) {
-      return NextResponse.json({
-        text: '__QUOTA__',
-        retryAfter: 60,
-      });
+      return NextResponse.json({ text: '__QUOTA__', retryAfter: 60 });
     }
-    if (msg.includes('API_KEY_INVALID') || msg.includes('PERMISSION_DENIED')) {
-      return NextResponse.json({
-        text: 'API Key inválida. Verificá GEMINI_API_KEY en .env.local y reiniciá el servidor.',
-        retryAfter: 0,
-      });
+    if (
+      msg.includes('API_KEY_INVALID') ||
+      msg.includes('PERMISSION_DENIED') ||
+      msg.includes('401') || msg.includes('403') ||
+      msg.toLowerCase().includes('api key not valid')
+    ) {
+      return NextResponse.json({ text: '__BAD_KEY__', retryAfter: 0 });
     }
-
-    return NextResponse.json({
-      text: `Error inesperado: ${msg.slice(0, 150)}`,
-      retryAfter: 0,
-    });
+    return NextResponse.json({ text: `Error inesperado: ${msg.slice(0, 150)}`, retryAfter: 0 });
   }
 }
