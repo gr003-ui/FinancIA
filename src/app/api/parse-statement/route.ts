@@ -1,8 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { parseStatementText } from '../../../lib/statementParser';
 
+// Forzar runtime de Node.js (necesario para pdf-parse)
+export const runtime = 'nodejs';
+
+// Tipado para pdf-parse (compatible con CJS y ESM)
+type PdfParseResult = { text: string; numpages: number };
+type PdfParseFn = (buffer: Buffer) => Promise<PdfParseResult>;
+
+function getPdfParse(): PdfParseFn {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const mod = require('pdf-parse') as PdfParseFn | { default: PdfParseFn };
+  return typeof mod === 'function' ? mod : mod.default;
+}
+
 export async function POST(req: NextRequest) {
   let body: { imageBase64?: string; mimeType?: string };
+
   try {
     body = await req.json();
   } catch {
@@ -15,19 +29,19 @@ export async function POST(req: NextRequest) {
   const { imageBase64, mimeType } = body;
 
   if (!imageBase64) {
-    return NextResponse.json({ error: 'No se recibió ningún archivo.' }, { status: 400 });
+    return NextResponse.json(
+      { error: 'No se recibió ningún archivo.' },
+      { status: 400 }
+    );
   }
 
-  const isPDF = mimeType === 'application/pdf' ||
-                (mimeType ?? '').includes('pdf');
+  const isPDF =
+    mimeType === 'application/pdf' ||
+    (mimeType ?? '').toLowerCase().includes('pdf');
 
   if (!isPDF) {
     return NextResponse.json(
-      {
-        error:
-          'Solo se soportan archivos PDF. Para imágenes, usá la opción de carga manual ' +
-          'o convertí la imagen a PDF primero.',
-      },
+      { error: 'Solo se soportan archivos PDF digitales (no escaneados).' },
       { status: 400 }
     );
   }
@@ -35,60 +49,69 @@ export async function POST(req: NextRequest) {
   const estimatedKB = (imageBase64.length * 0.75) / 1024;
   if (estimatedKB > 20000) {
     return NextResponse.json(
-      { error: 'PDF demasiado grande (máx 20MB).' },
+      { error: 'PDF demasiado grande (máx 20 MB).' },
       { status: 413 }
     );
   }
 
+  let pdfText = '';
+
   try {
-    // Importación dinámica para evitar problemas con el bundler
-    const pdfParse = (await import('pdf-parse')).default;
+    const pdfParse = getPdfParse();
     const buffer   = Buffer.from(imageBase64, 'base64');
-    const pdfData  = await pdfParse(buffer);
-    const text     = pdfData.text;
-
-    if (!text || text.trim().length < 20) {
-      return NextResponse.json(
-        {
-          error:
-            'El PDF no contiene texto extraíble (puede ser una imagen escaneada). ' +
-            'Intentá con un PDF digital, no escaneado.',
-        },
-        { status: 422 }
-      );
-    }
-
-    const transactions = parseStatementText(text);
-
-    if (transactions.length === 0) {
-      return NextResponse.json(
-        {
-          error:
-            'No se detectaron movimientos en el PDF. ' +
-            'Verificá que sea el resumen de consumos (no el resumen general). ' +
-            'También podés cargar los movimientos manualmente.',
-          rawText: text.slice(0, 500), // primeras 500 chars para debug
-        },
-        { status: 422 }
-      );
-    }
-
-    return NextResponse.json({ transactions });
-
+    const result   = await pdfParse(buffer);
+    pdfText        = result.text ?? '';
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
-    console.error('parse-statement error:', msg);
+    console.error('pdf-parse error:', msg);
 
-    if (msg.includes('Invalid PDF') || msg.includes('pdf')) {
+    if (
+      msg.toLowerCase().includes('password') ||
+      msg.toLowerCase().includes('encrypted')
+    ) {
       return NextResponse.json(
-        { error: 'El archivo no es un PDF válido o está protegido con contraseña.' },
+        { error: 'El PDF está protegido con contraseña. Quitale la contraseña antes de subir.' },
         { status: 400 }
       );
     }
 
     return NextResponse.json(
-      { error: `Error al procesar el PDF: ${msg.slice(0, 150)}` },
-      { status: 500 }
+      {
+        error:
+          'No se pudo leer el PDF. Asegurate de que sea un PDF digital ' +
+          '(descargado del homebanking o app del banco), no uno escaneado.',
+        debug: msg.slice(0, 200),
+      },
+      { status: 422 }
     );
   }
+
+  if (!pdfText || pdfText.trim().length < 20) {
+    return NextResponse.json(
+      {
+        error:
+          'El PDF no contiene texto extraíble. ' +
+          'Probablemente es un PDF escaneado (imagen). ' +
+          'Necesitás el PDF digital desde el homebanking.',
+        rawText: pdfText.slice(0, 200),
+      },
+      { status: 422 }
+    );
+  }
+
+  const transactions = parseStatementText(pdfText);
+
+  if (transactions.length === 0) {
+    return NextResponse.json(
+      {
+        error:
+          'Se extrajo texto del PDF pero no se detectaron movimientos con el formato esperado. ' +
+          'El banco puede usar un formato no estándar.',
+        rawText: pdfText.slice(0, 600),
+      },
+      { status: 422 }
+    );
+  }
+
+  return NextResponse.json({ transactions });
 }
