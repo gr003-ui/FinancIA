@@ -1,11 +1,19 @@
 "use client";
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Plus, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import TransactionForm from './TransactionForm';
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen]       = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 768);
+    check();
+    window.addEventListener('resize', check);
+    return () => window.removeEventListener('resize', check);
+  }, []);
 
   return (
     <>
@@ -13,17 +21,19 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         {children}
       </div>
 
-      {/* FAB */}
-      <motion.button
-        onClick={() => setOpen(true)}
-        whileHover={{ scale: 1.1 }}
-        whileTap={{ scale: 0.95 }}
-        className="fixed bottom-8 right-8 w-16 h-16 bg-emerald-500 rounded-full flex items-center justify-center shadow-2xl shadow-emerald-500/30 hover:bg-emerald-400 transition-colors z-40 text-white"
-      >
-        <Plus size={28} />
-      </motion.button>
+      {/* FAB solo en desktop — en mobile lo maneja BottomNav */}
+      {!isMobile && (
+        <motion.button
+          onClick={() => setOpen(true)}
+          whileHover={{ scale: 1.1 }}
+          whileTap={{ scale: 0.95 }}
+          className="fixed bottom-8 right-8 w-16 h-16 bg-emerald-500 rounded-full flex items-center justify-center shadow-2xl shadow-emerald-500/30 hover:bg-emerald-400 transition-colors z-40 text-white"
+        >
+          <Plus size={28} />
+        </motion.button>
+      )}
 
-      {/* Modal */}
+      {/* Modal desktop */}
       <AnimatePresence>
         {open && (
           <motion.div
