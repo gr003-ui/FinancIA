@@ -27,11 +27,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       {!isMobile && <Sidebar />}
 
       {/* Contenido principal */}
-      <div className="flex-1 flex flex-col min-h-screen">
-        <AppShell>{children}</AppShell>
+      <div className="flex-1 flex flex-col min-h-screen overflow-hidden">
+        <AppShell isMobile={isMobile}>{children}</AppShell>
       </div>
 
-      {/* Bottom nav solo en mobile */}
+      {/* Header + Drawer solo en mobile */}
       {isMobile && <BottomNav />}
     </div>
   );

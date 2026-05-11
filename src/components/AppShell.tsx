@@ -1,19 +1,16 @@
 "use client";
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Plus, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import TransactionForm from './TransactionForm';
 
-export default function AppShell({ children }: { children: React.ReactNode }) {
-  const [open, setOpen]       = useState(false);
-  const [isMobile, setIsMobile] = useState(false);
+interface AppShellProps {
+  children: React.ReactNode;
+  isMobile?: boolean;
+}
 
-  useEffect(() => {
-    const check = () => setIsMobile(window.innerWidth < 768);
-    check();
-    window.addEventListener('resize', check);
-    return () => window.removeEventListener('resize', check);
-  }, []);
+export default function AppShell({ children, isMobile = false }: AppShellProps) {
+  const [open, setOpen] = useState(false);
 
   return (
     <>

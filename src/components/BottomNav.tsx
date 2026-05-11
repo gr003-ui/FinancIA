@@ -2,27 +2,36 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
-  LayoutDashboard, CreditCard, BrainCircuit,
-  ListOrdered, Target, Plus, X,
+  LayoutDashboard, ListOrdered, TrendingUp, Target,
+  FileText, CreditCard, Upload, BrainCircuit, Settings,
+  Menu, X, Plus, Wallet, AlertTriangle,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useState } from 'react';
 import TransactionForm from './TransactionForm';
+import UserMenu from './UserMenu';
 import { useFinanceStore, getMonthlyAmount } from '../store/useFinanceStore';
 
+// ── Mismos items que el Sidebar de desktop ─────────────────────
 const NAV_ITEMS = [
-  { href: '/',            label: 'Inicio',     icon: LayoutDashboard },
-  { href: '/movimientos', label: 'Movimientos', icon: ListOrdered     },
-  { href: '/tarjetas',    label: 'Tarjetas',   icon: CreditCard      },
-  { href: '/objetivos',   label: 'Objetivos',  icon: Target          },
-  { href: '/ia',          label: 'IA',         icon: BrainCircuit    },
+  { name: 'Inicio',        href: '/',              icon: LayoutDashboard },
+  { name: 'Movimientos',   href: '/movimientos',   icon: ListOrdered     },
+  { name: 'Proyección',    href: '/proyeccion',    icon: TrendingUp      },
+  { name: 'Presupuestos',  href: '/presupuestos',  icon: Target          },
+  { name: 'Reporte PDF',   href: '/reporte',       icon: FileText        },
+  { name: 'Tarjetas',      href: '/tarjetas',      icon: CreditCard      },
+  { name: 'Importar CSV',  href: '/importar',      icon: Upload          },
+  { name: 'Analista IA',   href: '/ia',            icon: BrainCircuit    },
+  { name: 'Configuración', href: '/configuracion', icon: Settings        },
 ];
 
 export default function BottomNav() {
   const pathname = usePathname();
-  const [open, setOpen] = useState(false);
+  const [drawerOpen,  setDrawerOpen]  = useState(false);
+  const [modalOpen,   setModalOpen]   = useState(false);
   const { budgets, cards, transactions, exchangeRate } = useFinanceStore();
 
+  // ── Alertas (misma lógica que Sidebar) ─────────────────────
   const now   = new Date();
   const thisM = now.getMonth();
   const thisY = now.getFullYear();
@@ -39,19 +48,163 @@ export default function BottomNav() {
       .reduce((s, t) => s + toARS(getMonthlyAmount(t), t.currency), 0);
     return spent >= toARS(b.amount, b.currency) * 0.8;
   });
-  const hasCardAlert = cards.some(
+  const hasLowLimit = cards.some(
     (c) => c.type !== 'Débito' && c.limitOnePayment > 0 &&
       (c.availableOnePayment / c.limitOnePayment) * 100 < 20
   );
-  const hasAlert = hasBudgetAlert || hasCardAlert;
+  const prevM = thisM === 0 ? 11 : thisM - 1;
+  const prevY = thisM === 0 ? thisY - 1 : thisY;
+  const fixedLast = transactions.filter((t) => {
+    const d = new Date(t.date);
+    return t.type === 'income' && d.getMonth() === prevM && d.getFullYear() === prevY;
+  });
+  const thisMonthDesc = new Set(
+    transactions
+      .filter((t) => {
+        const d = new Date(t.date);
+        return t.type === 'income' && d.getMonth() === thisM && d.getFullYear() === thisY;
+      })
+      .map((t) => t.description.toLowerCase().trim())
+  );
+  const hasPendingFixed = fixedLast.some(
+    (t) => !thisMonthDesc.has(t.description.toLowerCase().trim())
+  );
 
-  const handleClose = () => setOpen(false);
+  const alertMap: Record<string, boolean> = {
+    '/':            hasPendingFixed,
+    '/presupuestos': hasBudgetAlert,
+    '/tarjetas':    hasLowLimit,
+  };
+
+  const closeDrawer = () => setDrawerOpen(false);
+  const closeModal  = () => setModalOpen(false);
 
   return (
     <>
-      {/* ── Modal nuevo movimiento ── */}
+      {/* ── Top bar mobile ──────────────────────────────────── */}
+      <header
+        className="fixed top-0 left-0 right-0 z-30 flex items-center justify-between px-4 h-14 border-b border-white/5"
+        style={{ backgroundColor: 'rgba(8,10,18,0.97)', backdropFilter: 'blur(20px)' }}
+      >
+        {/* Hamburger */}
+        <button
+          onClick={() => setDrawerOpen(true)}
+          className="w-10 h-10 flex items-center justify-center rounded-xl text-slate-400 active:bg-white/10 transition-colors"
+          style={{ WebkitTapHighlightColor: 'transparent' }}
+        >
+          <Menu size={22} />
+        </button>
+
+        {/* Logo centrado */}
+        <div className="flex items-center gap-2">
+          <Wallet size={18} className="text-emerald-500" />
+          <span className="text-white font-black text-base">FinancIA</span>
+        </div>
+
+        {/* User menu */}
+        <div className="w-10 h-10 flex items-center justify-center">
+          <UserMenu />
+        </div>
+      </header>
+
+      {/* Espaciado para que el contenido no quede bajo el header */}
+      <div className="h-14" />
+
+      {/* ── Drawer overlay ──────────────────────────────────── */}
       <AnimatePresence>
-        {open && (
+        {drawerOpen && (
+          <>
+            {/* Fondo oscuro */}
+            <motion.div
+              key="overlay"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="fixed inset-0 z-40"
+              style={{ backgroundColor: 'rgba(0,0,0,0.65)' }}
+              onClick={closeDrawer}
+            />
+
+            {/* Drawer izquierdo */}
+            <motion.aside
+              key="drawer"
+              initial={{ x: '-100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '-100%' }}
+              transition={{ type: 'spring', damping: 30, stiffness: 300 }}
+              className="fixed top-0 left-0 bottom-0 z-50 flex flex-col w-72 border-r border-white/10"
+              style={{ backgroundColor: '#0d1117' }}
+            >
+              {/* Header del drawer */}
+              <div className="flex items-center justify-between px-5 h-14 border-b border-white/5 flex-shrink-0">
+                <div className="flex items-center gap-3">
+                  <Wallet size={20} className="text-emerald-500" />
+                  <span className="text-white font-black text-lg">FinancIA</span>
+                </div>
+                <button
+                  onClick={closeDrawer}
+                  className="w-9 h-9 flex items-center justify-center rounded-xl text-slate-500 active:bg-white/10 transition-colors"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              {/* Nav items */}
+              <nav className="flex-1 overflow-y-auto px-3 py-3 space-y-1">
+                {NAV_ITEMS.map(({ name, href, icon: Icon }) => {
+                  const isActive = pathname === href;
+                  const hasAlert = alertMap[href] ?? false;
+
+                  return (
+                    <Link
+                      key={href}
+                      href={href}
+                      onClick={closeDrawer}
+                      style={{ WebkitTapHighlightColor: 'transparent' }}
+                      className={`flex items-center gap-3 px-3.5 py-3 rounded-2xl font-bold text-sm transition-colors ${
+                        isActive
+                          ? 'bg-emerald-500 text-white'
+                          : 'text-slate-400 active:bg-slate-800'
+                      }`}
+                    >
+                      <Icon size={19} className="flex-shrink-0" />
+                      <span className="flex-1">{name}</span>
+                      {hasAlert && !isActive && (
+                        <AlertTriangle size={13} className="text-amber-400 flex-shrink-0" />
+                      )}
+                    </Link>
+                  );
+                })}
+              </nav>
+
+              {/* User menu abajo */}
+              <div className="px-4 py-4 border-t border-white/5 flex-shrink-0">
+                <UserMenu />
+              </div>
+            </motion.aside>
+          </>
+        )}
+      </AnimatePresence>
+
+      {/* ── FAB + nuevo movimiento ───────────────────────────── */}
+      <motion.button
+        onClick={() => setModalOpen(true)}
+        whileTap={{ scale: 0.9 }}
+        className="fixed z-30 flex items-center justify-center w-14 h-14 rounded-full text-white"
+        style={{
+          bottom: 'calc(1.5rem + env(safe-area-inset-bottom))',
+          right: '1.25rem',
+          backgroundColor: '#10b981',
+          boxShadow: '0 8px 24px rgba(16,185,129,0.35)',
+        }}
+      >
+        <Plus size={26} />
+      </motion.button>
+
+      {/* ── Modal nuevo movimiento ───────────────────────────── */}
+      <AnimatePresence>
+        {modalOpen && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -60,8 +213,7 @@ export default function BottomNav() {
             className="fixed inset-0 z-50 flex items-end justify-center"
             style={{ backgroundColor: 'rgba(0,0,0,0.72)' }}
           >
-            {/* Tap fuera para cerrar */}
-            <div className="absolute inset-0" onClick={handleClose} />
+            <div className="absolute inset-0" onClick={closeModal} />
 
             <motion.div
               initial={{ y: '100%' }}
@@ -72,101 +224,21 @@ export default function BottomNav() {
               style={{ backgroundColor: '#0d1117', zIndex: 1 }}
               onClick={(e) => e.stopPropagation()}
             >
-              {/* Handle visual */}
               <div className="w-10 h-1 bg-white/20 rounded-full mx-auto mb-5" />
-
               <div className="flex justify-between items-center mb-5">
                 <p className="text-white font-black text-lg">Nuevo Movimiento</p>
                 <button
-                  onClick={handleClose}
+                  onClick={closeModal}
                   className="w-10 h-10 flex items-center justify-center bg-white/10 rounded-xl text-white active:bg-white/20 transition-colors"
                 >
                   <X size={18} />
                 </button>
               </div>
-
-              <TransactionForm onSuccess={handleClose} />
+              <TransactionForm onSuccess={closeModal} />
             </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
-
-      {/* ── FAB + ── */}
-      <motion.button
-        onClick={() => setOpen(true)}
-        whileTap={{ scale: 0.9 }}
-        className="fixed z-40 flex items-center justify-center w-14 h-14 rounded-full text-white"
-        style={{
-          bottom: 'calc(4.5rem + env(safe-area-inset-bottom))',
-          right: '1.25rem',
-          backgroundColor: '#10b981',
-          boxShadow: '0 8px 24px rgba(16,185,129,0.35)',
-        }}
-      >
-        <Plus size={26} />
-      </motion.button>
-
-      {/* ── Bottom Nav Bar ── */}
-      <nav
-        className="fixed bottom-0 left-0 right-0 z-30 border-t border-white/10"
-        style={{ backgroundColor: 'rgba(8,10,18,0.97)', backdropFilter: 'blur(20px)' }}
-      >
-        <div
-          className="flex items-center justify-around px-1"
-          style={{
-            paddingTop: '0.5rem',
-            paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))',
-          }}
-        >
-          {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
-            const active    = pathname === href;
-            const showAlert = href === '/tarjetas' && hasAlert;
-
-            return (
-              <Link
-                key={href}
-                href={href}
-                className="relative flex flex-col items-center gap-1 flex-1 py-1"
-                style={{ WebkitTapHighlightColor: 'transparent' }}
-              >
-                {active && (
-                  <motion.div
-                    layoutId="nav-indicator"
-                    className="absolute -top-[0.5rem] left-1/2 -translate-x-1/2 w-8 h-[2px] rounded-full"
-                    style={{ backgroundColor: '#10b981' }}
-                  />
-                )}
-
-                <div
-                  className="relative flex items-center justify-center w-10 h-10 rounded-2xl transition-colors duration-150"
-                  style={{
-                    backgroundColor: active ? 'rgba(16,185,129,0.12)' : 'transparent',
-                    color: active ? '#10b981' : '#64748b',
-                  }}
-                >
-                  <Icon size={20} />
-                  {showAlert && (
-                    <span
-                      className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full"
-                      style={{ backgroundColor: '#f43f5e' }}
-                    />
-                  )}
-                </div>
-
-                <span
-                  className="text-[10px] font-semibold leading-none"
-                  style={{ color: active ? '#10b981' : '#475569' }}
-                >
-                  {label}
-                </span>
-              </Link>
-            );
-          })}
-        </div>
-      </nav>
-
-      {/* Espaciado para que el contenido no quede tapado por el nav */}
-      <div style={{ height: 'calc(4rem + env(safe-area-inset-bottom))' }} />
     </>
   );
 }
