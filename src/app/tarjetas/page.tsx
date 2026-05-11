@@ -236,14 +236,12 @@ export default function TarjetasPage() {
                       </div>
                     )}
 
-                    {/* Cargar resumen */}
-                    <button
-                      onClick={() => setUploaderCard({ id: card.id, bank: card.bank })}
-                      className="flex items-center gap-2 px-5 py-3 rounded-2xl font-black text-xs uppercase border border-white/10 bg-white/5 text-slate-400 hover:text-white hover:border-white/20 transition-all"
-                    >
+                    {/* Cargar resumen — próximamente */}
+                    <div className="flex items-center gap-2 px-5 py-3 rounded-2xl font-black text-xs uppercase border border-white/5 bg-white/[0.02] text-slate-600 cursor-not-allowed select-none">
                       <Upload size={14} />
                       Cargar resumen con IA
-                    </button>
+                      <span className="ml-1 px-2 py-0.5 bg-emerald-500/10 text-emerald-600 text-[10px] rounded-full border border-emerald-500/10">pronto</span>
+                    </div>
                   </div>
                 )}
               </div>
@@ -323,16 +321,8 @@ export default function TarjetasPage() {
         <TransactionForm />
       </div>
 
-      {/* Modal de carga de resumen */}
-      <AnimatePresence>
-        {uploaderCard && (
-          <CardStatementUploader
-            cardId={uploaderCard.id}
-            cardBank={uploaderCard.bank}
-            onClose={() => setUploaderCard(null)}
-          />
-        )}
-      </AnimatePresence>
+      {/* Modal de carga de resumen — deshabilitado hasta configurar pdf-parse */}
+      {false && uploaderCard && null}
     </main>
   );
 }
