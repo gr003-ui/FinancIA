@@ -103,7 +103,7 @@ export default function BottomNav() {
 
         {/* User menu */}
         <div className="w-10 h-10 flex items-center justify-center">
-          <UserMenu />
+          <UserMenu collapsed />
         </div>
       </header>
 
@@ -180,7 +180,7 @@ export default function BottomNav() {
 
               {/* User menu abajo */}
               <div className="px-4 py-4 border-t border-white/5 flex-shrink-0">
-                <UserMenu />
+                <UserMenu collapsed />
               </div>
             </motion.aside>
           </>
