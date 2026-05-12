@@ -47,6 +47,7 @@ export interface Card {
 }
 
 export interface Transaction {
+  received: any;
   id: string;
   description: string;
   amount: number;
