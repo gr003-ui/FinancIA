@@ -2,6 +2,7 @@
 import { useState } from 'react';
 import { useFinanceStore, AccentTheme } from '../../store/useFinanceStore';
 import { User, ShieldCheck, Bell, CreditCard, Save, AlertTriangle, DollarSign, Palette } from 'lucide-react';
+import CotizacionesWidget from '../../components/CotizacionesWidget';
 
 const THEMES: { id: AccentTheme; label: string; color: string; bg: string }[] = [
   { id: 'emerald', label: 'Esmeralda', color: '#10b981', bg: 'rgba(16,185,129,0.15)' },
@@ -45,7 +46,7 @@ export default function ConfigPage() {
   };
 
   return (
-    <main className="p-10 max-w-4xl mx-auto space-y-10">
+    <main className="p-6 md:p-10 max-w-4xl mx-auto space-y-10">
       <header>
         <h1 className="text-4xl font-black text-white tracking-tighter">Configuración</h1>
         <p className="text-slate-500 font-medium">Gestioná tu perfil y preferencias de la cuenta.</p>
@@ -86,6 +87,9 @@ export default function ConfigPage() {
 
         {/* OPCIONES */}
         <div className="md:col-span-2 space-y-4">
+
+          {/* COTIZACIONES EN TIEMPO REAL */}
+          <CotizacionesWidget />
 
           {/* TEMA DE COLOR */}
           <div className="bg-slate-900 rounded-[3rem] p-8 border border-white/10 space-y-4">
@@ -166,15 +170,15 @@ export default function ConfigPage() {
             </div>
           </div>
 
-          {/* COTIZACIÓN */}
+          {/* COTIZACIÓN MANUAL */}
           <div className="bg-slate-900 rounded-[3rem] p-8 border border-white/10 space-y-4">
             <div className="flex items-center gap-3 mb-2">
               <div className="p-3 bg-amber-500/10 text-amber-400 rounded-xl">
                 <DollarSign size={20} />
               </div>
               <div>
-                <p className="font-bold text-white">Cotización USD/ARS</p>
-                <p className="text-xs text-slate-500">Valor por defecto para la pesificación.</p>
+                <p className="font-bold text-white">Cotización Manual</p>
+                <p className="text-xs text-slate-500">Sobreescribí la cotización automática.</p>
               </div>
             </div>
             <div className="flex gap-3">
